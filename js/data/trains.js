@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════
 // RailSmart — Train Schedules & Live Data
-// Bandel–Howrah Local Train Timetable
+// Coverage: Main Line, Chord Line, Goghat Line
 // ═══════════════════════════════════════════════
 
 const TRAIN_TYPES = {
@@ -16,17 +16,56 @@ const TRAIN_TYPES = {
 
 const FARE_CLASSES = ['1A', '2A', '3A', 'SL', 'CC', '2S', 'GN'];
 
-// ── Station order & distances for the BDC–HWH line ──
-const DOWN_STATIONS = ['BDC','HGY','CNS','CGR','MUU','BHR','BBAE','SHE','SRP','RIS','KOG','HMZ','UPA','BLY','BEQ','LLH','HWH'];
-const DOWN_DIST =     [0,     2,    4,    7,    9,   11,   14,    17,   20,   24,   27,   29,   32,   34,   37,   40,   45];
+// ══════════════════════════════════════════════════════════
+// MAIN LINE: HWH → BWN (via Bandel) — 34 stations, ~107 km
+// ══════════════════════════════════════════════════════════
 
-const UP_STATIONS = ['HWH','LLH','BEQ','BLY','UPA','HMZ','KOG','RIS','SRP','SHE','BBAE','BHR','MUU','CGR','CNS','HGY','BDC'];
-const UP_DIST =     [0,     5,    8,   11,   13,   16,   18,   21,   25,   28,   31,    34,   36,   38,   41,   43,   45];
+const MAIN_DOWN_STATIONS = ['BWN','GRP','SKG','PLAE','RSLR','NMF','MYM','BGF','DBP','BOI','BCGM','SLG','PDA','KHN','TLO','MUG','ADST','BDC','HGY','CNS','CGR','MUU','BHR','BBAE','SHE','SRP','RIS','KOG','HMZ','UPA','BLY','BEQ','LLH','HWH'];
+const MAIN_DOWN_DIST =     [0,    4,    8,   12,   15,   17,   21,   24,   27,   29,   31,    34,   38,   42,   45,   48,   50,    52,   54,   56,   59,   61,   63,   66,   69,   72,   76,   79,   81,   84,   86,   89,   92,   97];
 
-// Helper: convert "HH:MM" to minutes since midnight
+const MAIN_UP_STATIONS = ['HWH','LLH','BEQ','BLY','UPA','HMZ','KOG','RIS','SRP','SHE','BBAE','BHR','MUU','CGR','CNS','HGY','BDC','ADST','MUG','TLO','KHN','PDA','SLG','BCGM','BOI','DBP','BGF','MYM','NMF','RSLR','PLAE','SKG','GRP','BWN'];
+const MAIN_UP_DIST =     [0,    5,    8,   11,   13,   16,   18,   21,   25,   28,   31,    34,   36,   38,   41,   43,   45,    47,    49,   52,   55,   59,   63,    66,   68,   70,   73,   76,   80,   82,    85,   89,   93,   97];
+
+// Bandel sub-section: BDC → HWH (same as before)
+const BDC_DOWN_STATIONS = ['BDC','HGY','CNS','CGR','MUU','BHR','BBAE','SHE','SRP','RIS','KOG','HMZ','UPA','BLY','BEQ','LLH','HWH'];
+const BDC_DOWN_DIST =     [0,     2,    4,    7,    9,   11,   14,    17,   20,   24,   27,   29,   32,   34,   37,   40,   45];
+
+const BDC_UP_STATIONS = ['HWH','LLH','BEQ','BLY','UPA','HMZ','KOG','RIS','SRP','SHE','BBAE','BHR','MUU','CGR','CNS','HGY','BDC'];
+const BDC_UP_DIST =     [0,     5,    8,   11,   13,   16,   18,   21,   25,   28,   31,    34,   36,   38,   41,   43,   45];
+
+// ══════════════════════════════════════════════════════════
+// CHORD LINE: HWH → BWN (via Dankuni) — 30 stations, ~95 km
+// ══════════════════════════════════════════════════════════
+
+const CHORD_DOWN_STATIONS = ['BWN','GRP','SKG','PRAE','CHC','MSAE','NBAE','JRAE','JPQ','GRAE','HIH','SHBC','DNHL','BMAE','PBZ','CDAE','MDSE','KQU','BLAE','MBE','BRPA','BPAE','JOX','GBRA','DKAE','BZL','BLY','BEQ','LLH','HWH'];
+const CHORD_DOWN_DIST =     [0,    4,    8,   12,   15,   18,   21,    24,   27,   30,   33,   36,   38,    41,   44,   47,   50,    53,   55,   58,   61,    63,   66,   69,    72,   75,   78,   81,   84,   89];
+
+const CHORD_UP_STATIONS = ['HWH','LLH','BEQ','BLY','BZL','DKAE','GBRA','JOX','BPAE','BRPA','MBE','BLAE','KQU','MDSE','CDAE','PBZ','BMAE','DNHL','SHBC','HIH','GRAE','JPQ','JRAE','NBAE','MSAE','CHC','PRAE','SKG','GRP','BWN'];
+const CHORD_UP_DIST =     [0,    5,    8,   11,   14,    17,    20,   23,   26,    29,   31,   33,   36,   39,    42,   45,   48,    50,    53,   56,   59,    62,   65,    68,    71,   74,    77,   81,   85,   89];
+
+// ══════════════════════════════════════════════════════════
+// GOGHAT LINE: HWH → GOGT (via Seoraphuli-Tarakeswar)
+// ══════════════════════════════════════════════════════════
+
+const GOGHAT_DOWN_STATIONS = ['GOGT','AMBG','MAYP','TKPH','TLPH','TAK','LOK','BAHW','KKAE','HPL','MLYA','NKL','KQLS','SIU','NSF','DEA','SHE','SRP','RIS','KOG','HMZ','UPA','BLY','BEQ','LLH','HWH'];
+const GOGHAT_DOWN_DIST =     [0,     8,    16,   21,   25,   28,   32,  37,   41,   45,   49,   52,   56,   60,  64,   68,   72,   75,   79,   82,   84,    87,   89,   92,   95,   100];
+
+const GOGHAT_UP_STATIONS = ['HWH','LLH','BEQ','BLY','UPA','HMZ','KOG','RIS','SRP','SHE','DEA','NSF','SIU','KQLS','NKL','MLYA','HPL','KKAE','BAHW','LOK','TAK','TLPH','TKPH','MAYP','AMBG','GOGT'];
+const GOGHAT_UP_DIST =     [0,    5,    8,   11,   13,   16,   18,   21,   25,   28,   32,   36,   40,   44,    48,   51,    55,   59,    63,   68,   72,   75,    79,    84,    92,   100];
+
+// Tarakeswar sub-section (for TAK locals)
+const TAK_DOWN_STATIONS = ['TAK','LOK','BAHW','KKAE','HPL','MLYA','NKL','KQLS','SIU','NSF','DEA','SHE','SRP','RIS','KOG','HMZ','UPA','BLY','BEQ','LLH','HWH'];
+const TAK_DOWN_DIST =     [0,    4,    9,    13,   17,   21,   24,   28,   32,   36,   40,   44,   47,   51,   54,   56,    59,   61,   64,   67,   72];
+
+const TAK_UP_STATIONS = ['HWH','LLH','BEQ','BLY','UPA','HMZ','KOG','RIS','SRP','SHE','DEA','NSF','SIU','KQLS','NKL','MLYA','HPL','KKAE','BAHW','LOK','TAK'];
+const TAK_UP_DIST =     [0,    5,    8,   11,   13,   16,   18,   21,   25,   28,   32,   36,   40,   44,    48,   51,    55,   59,    63,   68,   72];
+
+// ══════════════════════════════════════════════════════════
+// Helper functions
+// ══════════════════════════════════════════════════════════
+
 function _t(s) { const [h,m] = s.split(':').map(Number); return h*60+m; }
 
-// Build a route array from a list of time strings
 function _buildRoute(stations, distances, times) {
   return stations.map((code, i) => {
     const min = _t(times[i]);
@@ -40,8 +79,25 @@ function _buildRoute(stations, distances, times) {
   });
 }
 
-// ── Raw timetable data: [trainNumber, ...times] ──
-const DOWN_RAW = [
+// Generate evenly spaced times for a route
+function _genTimes(startTime, stations, avgMinPerStation) {
+  const times = [];
+  const startMin = _t(startTime);
+  for (let i = 0; i < stations.length; i++) {
+    const totalMin = startMin + Math.round(i * avgMinPerStation);
+    const h = Math.floor(totalMin / 60) % 24;
+    const m = totalMin % 60;
+    times.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  }
+  return times;
+}
+
+// ══════════════════════════════════════════════════════════
+// RAW TIMETABLE DATA
+// ══════════════════════════════════════════════════════════
+
+// ── BDC → HWH locals (existing, keeping all) ──
+const BDC_DOWN_RAW = [
   ['37212','03:07','03:11','03:13','03:17','03:19','03:21','03:25','03:28','03:31','03:35','03:38','03:40','03:43','03:45','03:48','03:51','04:10'],
   ['37214','03:30','03:34','03:36','03:39','03:41','03:43','03:47','03:50','03:52','03:56','03:58','04:00','04:03','04:05','04:08','04:11','04:35'],
   ['37216','04:45','04:49','04:51','04:54','04:56','04:58','05:02','05:05','05:07','05:11','05:13','05:15','05:18','05:20','05:23','05:26','05:50'],
@@ -81,7 +137,7 @@ const DOWN_RAW = [
   ['37282','22:50','22:54','22:56','22:59','23:01','23:03','23:07','23:10','23:13','23:17','23:19','23:21','23:24','23:26','23:29','23:32','23:55'],
 ];
 
-const UP_RAW = [
+const BDC_UP_RAW = [
   ['37211','04:47','05:05','05:08','05:11','05:13','05:16','05:18','05:21','05:25','05:28','05:31','05:34','05:36','05:38','05:41','05:43','05:45'],
   ['37213','05:05','05:23','05:26','05:29','05:31','05:34','05:36','05:39','05:43','05:46','05:49','05:52','05:54','05:56','05:59','06:01','06:08'],
   ['37215','06:26','06:44','06:47','06:50','06:52','06:55','06:57','07:00','07:04','07:07','07:10','07:13','07:15','07:17','07:20','07:22','07:25'],
@@ -120,106 +176,180 @@ const UP_RAW = [
   ['37281','22:40','22:58','23:01','23:04','23:06','23:09','23:11','23:14','23:18','23:21','23:24','23:27','23:29','23:31','23:34','23:36','23:40'],
 ];
 
-// ── Build the TRAINS array ──
+// ══════════════════════════════════════════════════════════
+// BUILD THE TRAINS ARRAY
+// ══════════════════════════════════════════════════════════
+
 const TRAINS = [];
 
-// Down trains (BDC → HWH)
-DOWN_RAW.forEach(row => {
+// ── BDC → HWH locals ──
+BDC_DOWN_RAW.forEach(row => {
   const [num, ...times] = row;
   TRAINS.push({
-    number: num,
-    name: 'Bandel - Howrah Local',
-    type: 'LOCAL',
+    number: num, name: 'Bandel - Howrah Local', type: 'LOCAL', routeId: 'main',
     days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-    route: _buildRoute(DOWN_STATIONS, DOWN_DIST, times),
-    fares: { 'GN': 10, '2S': 15 },
-    status: 'running',
-    maxDelay: 15,
+    route: _buildRoute(BDC_DOWN_STATIONS, BDC_DOWN_DIST, times),
+    fares: { 'GN': 10, '2S': 15 }, status: 'running', maxDelay: 15,
   });
 });
 
-// Up trains (HWH → BDC)
-UP_RAW.forEach(row => {
+// ── HWH → BDC locals ──
+BDC_UP_RAW.forEach(row => {
   const [num, ...times] = row;
   TRAINS.push({
-    number: num,
-    name: 'Howrah - Bandel Local',
-    type: 'LOCAL',
+    number: num, name: 'Howrah - Bandel Local', type: 'LOCAL', routeId: 'main',
     days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-    route: _buildRoute(UP_STATIONS, UP_DIST, times),
-    fares: { 'GN': 10, '2S': 15 },
-    status: 'running',
-    maxDelay: 15,
+    route: _buildRoute(BDC_UP_STATIONS, BDC_UP_DIST, times),
+    fares: { 'GN': 10, '2S': 15 }, status: 'running', maxDelay: 15,
   });
 });
 
+// ── BWN → HWH Main Line locals (generated schedules) ──
+const BWN_DOWN_DEPARTURES = ['03:05','04:05','05:05','05:42','06:18','06:35','07:00','07:38','08:22','08:46','10:02','11:22','12:25','13:40','15:15','16:30','17:25','18:00','18:40','19:55','20:40'];
+BWN_DOWN_DEPARTURES.forEach((dep, i) => {
+  const num = String(37812 + i * 2);
+  const times = _genTimes(dep, MAIN_DOWN_STATIONS, 4.1);
+  TRAINS.push({
+    number: num, name: 'Barddhaman - Howrah Local', type: 'LOCAL', routeId: 'main',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(MAIN_DOWN_STATIONS, MAIN_DOWN_DIST, times),
+    fares: { 'GN': 15, '2S': 25 }, status: 'running', maxDelay: 20,
+  });
+});
 
-// ── Simulate live running data ──
+// ── HWH → BWN Main Line locals ──
+const BWN_UP_DEPARTURES = ['04:15','05:50','06:30','07:15','08:45','09:30','10:40','11:25','12:45','13:50','14:52','15:45','16:30','17:15','18:20','19:10','20:05','21:00'];
+BWN_UP_DEPARTURES.forEach((dep, i) => {
+  const num = String(37811 + i * 2);
+  const times = _genTimes(dep, MAIN_UP_STATIONS, 4.1);
+  TRAINS.push({
+    number: num, name: 'Howrah - Barddhaman Local', type: 'LOCAL', routeId: 'main',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(MAIN_UP_STATIONS, MAIN_UP_DIST, times),
+    fares: { 'GN': 15, '2S': 25 }, status: 'running', maxDelay: 20,
+  });
+});
+
+// ── BWN → HWH Chord Line locals ──
+const CHORD_DOWN_DEPARTURES = ['04:10','05:20','06:00','06:40','07:20','08:10','09:00','10:15','11:30','12:45','14:00','15:20','16:15','17:00','17:45','18:30','19:20','20:15','21:10'];
+CHORD_DOWN_DEPARTURES.forEach((dep, i) => {
+  const num = String(37302 + i * 2);
+  const times = _genTimes(dep, CHORD_DOWN_STATIONS, 3.8);
+  TRAINS.push({
+    number: num, name: 'Barddhaman - Howrah Local (Chord)', type: 'LOCAL', routeId: 'chord',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(CHORD_DOWN_STATIONS, CHORD_DOWN_DIST, times),
+    fares: { 'GN': 15, '2S': 25 }, status: 'running', maxDelay: 18,
+  });
+});
+
+// ── HWH → BWN Chord Line locals ──
+const CHORD_UP_DEPARTURES = ['04:30','05:30','06:15','07:00','07:45','08:30','09:30','10:45','12:00','13:15','14:30','15:30','16:20','17:10','18:00','18:50','19:40','20:30','21:25'];
+CHORD_UP_DEPARTURES.forEach((dep, i) => {
+  const num = String(37301 + i * 2);
+  const times = _genTimes(dep, CHORD_UP_STATIONS, 3.8);
+  TRAINS.push({
+    number: num, name: 'Howrah - Barddhaman Local (Chord)', type: 'LOCAL', routeId: 'chord',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(CHORD_UP_STATIONS, CHORD_UP_DIST, times),
+    fares: { 'GN': 15, '2S': 25 }, status: 'running', maxDelay: 18,
+  });
+});
+
+// ── HWH → Tarakeswar locals ──
+const TAK_UP_DEPARTURES = ['05:35','06:30','07:25','08:40','09:45','10:50','12:10','13:30','14:50','16:00','17:10','18:15','19:20','20:30'];
+TAK_UP_DEPARTURES.forEach((dep, i) => {
+  const num = String(37351 + i * 2);
+  const times = _genTimes(dep, TAK_UP_STATIONS, 4.5);
+  TRAINS.push({
+    number: num, name: 'Howrah - Tarakeswar Local', type: 'LOCAL', routeId: 'goghat',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(TAK_UP_STATIONS, TAK_UP_DIST, times),
+    fares: { 'GN': 10, '2S': 20 }, status: 'running', maxDelay: 15,
+  });
+});
+
+// ── Tarakeswar → HWH locals ──
+const TAK_DOWN_DEPARTURES = ['04:40','05:35','06:30','07:40','08:50','10:00','11:20','12:40','14:00','15:10','16:20','17:30','18:40','19:50'];
+TAK_DOWN_DEPARTURES.forEach((dep, i) => {
+  const num = String(37352 + i * 2);
+  const times = _genTimes(dep, TAK_DOWN_STATIONS, 4.5);
+  TRAINS.push({
+    number: num, name: 'Tarakeswar - Howrah Local', type: 'LOCAL', routeId: 'goghat',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(TAK_DOWN_STATIONS, TAK_DOWN_DIST, times),
+    fares: { 'GN': 10, '2S': 20 }, status: 'running', maxDelay: 15,
+  });
+});
+
+// ── HWH → Goghat locals ──
+const GOGT_UP_DEPARTURES = ['05:15','08:15','12:30','16:45','19:30'];
+GOGT_UP_DEPARTURES.forEach((dep, i) => {
+  const num = String(37371 + i * 2);
+  const times = _genTimes(dep, GOGHAT_UP_STATIONS, 5.5);
+  TRAINS.push({
+    number: num, name: 'Howrah - Goghat Local', type: 'LOCAL', routeId: 'goghat',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(GOGHAT_UP_STATIONS, GOGHAT_UP_DIST, times),
+    fares: { 'GN': 15, '2S': 25 }, status: 'running', maxDelay: 20,
+  });
+});
+
+// ── Goghat → HWH locals ──
+const GOGT_DOWN_DEPARTURES = ['04:30','07:30','11:45','15:30','18:15'];
+GOGT_DOWN_DEPARTURES.forEach((dep, i) => {
+  const num = String(37372 + i * 2);
+  const times = _genTimes(dep, GOGHAT_DOWN_STATIONS, 5.5);
+  TRAINS.push({
+    number: num, name: 'Goghat - Howrah Local', type: 'LOCAL', routeId: 'goghat',
+    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    route: _buildRoute(GOGHAT_DOWN_STATIONS, GOGHAT_DOWN_DIST, times),
+    fares: { 'GN': 15, '2S': 25 }, status: 'running', maxDelay: 20,
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+// LIVE DATA & SEARCH FUNCTIONS
+// ══════════════════════════════════════════════════════════
+
 function generateLiveData(train) {
   const currentMin = getCurrentSimMinutes();
   const routeWithLive = train.route.map((stop, i) => {
     const schedArr = stop.arrivalMin;
     const schedDep = stop.departureMin;
-
-    // Generate random delay (progressive — increases along route)
     const baseDelay = Math.floor(Math.random() * train.maxDelay * (i / train.route.length));
     const delay = Math.max(0, baseDelay + Math.floor(Math.random() * 10) - 5);
-
     const actualArr = schedArr ? schedArr + delay : null;
     const actualDep = schedDep ? schedDep + delay : null;
-
-    // Determine if train has passed this station
     const refTime = actualDep || actualArr;
     const hasPassed = refTime ? currentMin >= refTime : false;
-
-    return {
-      ...stop,
-      actualArrival: actualArr,
-      actualDeparture: actualDep,
-      delay,
-      hasPassed,
-      stationInfo: findStation(stop.station),
-    };
+    return { ...stop, actualArrival: actualArr, actualDeparture: actualDep, delay, hasPassed, stationInfo: findStation(stop.station) };
   });
 
-  // Find current position
   let currentStationIdx = 0;
   for (let i = routeWithLive.length - 1; i >= 0; i--) {
     const refTime = routeWithLive[i].actualDeparture || routeWithLive[i].actualArrival;
-    if (refTime && currentMin >= refTime) {
-      currentStationIdx = i;
-      break;
-    }
+    if (refTime && currentMin >= refTime) { currentStationIdx = i; break; }
   }
 
-  // Calculate overall delay
-  const lastPassedStop = routeWithLive[currentStationIdx];
-  const overallDelay = lastPassedStop.delay || 0;
-
-  return {
-    ...train,
-    liveRoute: routeWithLive,
-    currentStationIdx,
-    overallDelay,
-    isRunning: train.status === 'running',
-  };
+  return { ...train, liveRoute: routeWithLive, currentStationIdx, overallDelay: routeWithLive[currentStationIdx].delay || 0, isRunning: train.status === 'running' };
 }
 
-// Get type label
-function getTrainTypeLabel(type) {
-  return TRAIN_TYPES[type] || type;
-}
+function getTrainTypeLabel(type) { return TRAIN_TYPES[type] || type; }
 
-// Filter trains by type
 function filterTrainsByType(type) {
   if (type === 'all') return TRAINS;
-  if (type === 'express') return TRAINS.filter(t => ['SF', 'EXP', 'RAJ', 'SHATABDI', 'DURONTO', 'MAIL'].includes(t.type));
+  if (type === 'express') return TRAINS.filter(t => ['SF','EXP','RAJ','SHATABDI','DURONTO','MAIL'].includes(t.type));
   if (type === 'local') return TRAINS.filter(t => t.type === 'LOCAL');
   if (type === 'metro') return TRAINS.filter(t => t.type === 'METRO');
   return TRAINS;
 }
 
-// Search trains between two stations
+function filterTrainsByRoute(routeId) {
+  if (!routeId || routeId === 'all') return TRAINS;
+  return TRAINS.filter(t => t.routeId === routeId);
+}
+
 function searchTrainsBetweenStations(fromCode, toCode) {
   return TRAINS.filter(train => {
     const fromIdx = train.route.findIndex(s => s.station === fromCode);
@@ -228,38 +358,23 @@ function searchTrainsBetweenStations(fromCode, toCode) {
   });
 }
 
-// Search trains by number or name
 function searchTrainByNumberOrName(query) {
   const q = query.toLowerCase().trim();
   if (!q) return [];
-  return TRAINS.filter(t =>
-    t.number.includes(q) ||
-    t.name.toLowerCase().includes(q)
-  );
+  return TRAINS.filter(t => t.number.includes(q) || t.name.toLowerCase().includes(q));
 }
 
-// Get journey details between two stations on a specific train
 function getJourneyDetails(train, fromCode, toCode) {
   const fromIdx = train.route.findIndex(s => s.station === fromCode);
   const toIdx = train.route.findIndex(s => s.station === toCode);
   if (fromIdx === -1 || toIdx === -1 || fromIdx >= toIdx) return null;
-
   const fromStop = train.route[fromIdx];
   const toStop = train.route[toIdx];
-  const depTime = fromStop.departureMin;
-  const arrTime = toStop.arrivalMin;
-  const duration = arrTime - depTime;
-  const distance = toStop.distKm - fromStop.distKm;
-
   return {
-    from: fromStop,
-    to: toStop,
-    fromIdx,
-    toIdx,
-    departureMin: depTime,
-    arrivalMin: arrTime,
-    duration,
-    distance,
+    from: fromStop, to: toStop, fromIdx, toIdx,
+    departureMin: fromStop.departureMin, arrivalMin: toStop.arrivalMin,
+    duration: toStop.arrivalMin - fromStop.departureMin,
+    distance: toStop.distKm - fromStop.distKm,
     stops: toIdx - fromIdx - 1,
   };
 }

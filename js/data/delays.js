@@ -11,24 +11,44 @@ const DELAY_CAUSES = [
   { id: 'crew',      label: 'Crew / Loco Issue',    color: 'var(--chart-crew)',      icon: '👷', pct:  8 },
 ];
 
-// Track section data for the 16 inter-station segments on the BDC–HWH line
+// Track section data for all routes
 const TRACK_SECTIONS = [
-  { from: 'BDC',  to: 'HGY',  distKm:  2.5, railType: '52kg', age: 18, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 64 },
-  { from: 'HGY',  to: 'CNS',  distKm:  1.8, railType: '52kg', age: 14, signalling: 'Semi-Auto', lastUpgrade: 2016, score: 68 },
-  { from: 'CNS',  to: 'CGR',  distKm:  3.4, railType: '52kg', age: 20, signalling: 'Manual',    lastUpgrade: 2010, score: 47 },
-  { from: 'CGR',  to: 'MUU',  distKm:  2.0, railType: '52kg', age: 16, signalling: 'Semi-Auto', lastUpgrade: 2015, score: 61 },
-  { from: 'MUU',  to: 'BHR',  distKm:  2.1, railType: '52kg', age: 12, signalling: 'Semi-Auto', lastUpgrade: 2018, score: 71 },
-  { from: 'BHR',  to: 'BBAE', distKm:  3.8, railType: '52kg', age: 22, signalling: 'Manual',    lastUpgrade: 2008, score: 43 },
-  { from: 'BBAE', to: 'SHE',  distKm:  2.5, railType: '60kg', age:  8, signalling: 'Auto',      lastUpgrade: 2020, score: 82 },
-  { from: 'SHE',  to: 'SRP',  distKm:  3.0, railType: '60kg', age:  6, signalling: 'Auto',      lastUpgrade: 2022, score: 87 },
-  { from: 'SRP',  to: 'RIS',  distKm:  3.0, railType: '52kg', age: 14, signalling: 'Semi-Auto', lastUpgrade: 2016, score: 66 },
-  { from: 'RIS',  to: 'KOG',  distKm:  2.8, railType: '52kg', age: 16, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 60 },
-  { from: 'KOG',  to: 'HMZ',  distKm:  2.0, railType: '52kg', age: 18, signalling: 'Semi-Auto', lastUpgrade: 2013, score: 57 },
-  { from: 'HMZ',  to: 'UPA',  distKm:  1.9, railType: '60kg', age:  7, signalling: 'Auto',      lastUpgrade: 2021, score: 85 },
-  { from: 'UPA',  to: 'BLY',  distKm:  1.8, railType: '60kg', age:  5, signalling: 'Auto',      lastUpgrade: 2023, score: 91 },
-  { from: 'BLY',  to: 'BEQ',  distKm:  2.1, railType: '60kg', age:  5, signalling: 'Auto',      lastUpgrade: 2023, score: 90 },
-  { from: 'BEQ',  to: 'LLH',  distKm:  1.6, railType: '60kg', age:  4, signalling: 'Auto',      lastUpgrade: 2024, score: 93 },
-  { from: 'LLH',  to: 'HWH',  distKm:  4.2, railType: '60kg', age:  3, signalling: 'ATP',       lastUpgrade: 2024, score: 96 },
+  // ── Main Line: BDC → HWH ──
+  { from: 'BDC',  to: 'HGY',  distKm: 2.5, railType: '52kg', age: 18, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 64, route: 'main' },
+  { from: 'HGY',  to: 'CNS',  distKm: 1.8, railType: '52kg', age: 14, signalling: 'Semi-Auto', lastUpgrade: 2016, score: 68, route: 'main' },
+  { from: 'CNS',  to: 'CGR',  distKm: 3.4, railType: '52kg', age: 20, signalling: 'Manual',    lastUpgrade: 2010, score: 47, route: 'main' },
+  { from: 'CGR',  to: 'MUU',  distKm: 2.0, railType: '52kg', age: 16, signalling: 'Semi-Auto', lastUpgrade: 2015, score: 61, route: 'main' },
+  { from: 'MUU',  to: 'BHR',  distKm: 2.1, railType: '52kg', age: 12, signalling: 'Semi-Auto', lastUpgrade: 2018, score: 71, route: 'main' },
+  { from: 'BHR',  to: 'BBAE', distKm: 3.8, railType: '52kg', age: 22, signalling: 'Manual',    lastUpgrade: 2008, score: 43, route: 'main' },
+  { from: 'BBAE', to: 'SHE',  distKm: 2.5, railType: '60kg', age:  8, signalling: 'Auto',      lastUpgrade: 2020, score: 82, route: 'main' },
+  { from: 'SHE',  to: 'SRP',  distKm: 3.0, railType: '60kg', age:  6, signalling: 'Auto',      lastUpgrade: 2022, score: 87, route: 'main' },
+  { from: 'SRP',  to: 'RIS',  distKm: 3.0, railType: '52kg', age: 14, signalling: 'Semi-Auto', lastUpgrade: 2016, score: 66, route: 'main' },
+  { from: 'RIS',  to: 'KOG',  distKm: 2.8, railType: '52kg', age: 16, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 60, route: 'main' },
+  { from: 'KOG',  to: 'HMZ',  distKm: 2.0, railType: '52kg', age: 18, signalling: 'Semi-Auto', lastUpgrade: 2013, score: 57, route: 'main' },
+  { from: 'HMZ',  to: 'UPA',  distKm: 1.9, railType: '60kg', age:  7, signalling: 'Auto',      lastUpgrade: 2021, score: 85, route: 'main' },
+  { from: 'UPA',  to: 'BLY',  distKm: 1.8, railType: '60kg', age:  5, signalling: 'Auto',      lastUpgrade: 2023, score: 91, route: 'main' },
+  { from: 'BLY',  to: 'BEQ',  distKm: 2.1, railType: '60kg', age:  5, signalling: 'Auto',      lastUpgrade: 2023, score: 90, route: 'main' },
+  { from: 'BEQ',  to: 'LLH',  distKm: 1.6, railType: '60kg', age:  4, signalling: 'Auto',      lastUpgrade: 2024, score: 93, route: 'main' },
+  { from: 'LLH',  to: 'HWH',  distKm: 4.2, railType: '60kg', age:  3, signalling: 'ATP',       lastUpgrade: 2024, score: 96, route: 'main' },
+  // ── Main Line extension: BDC → BWN ──
+  { from: 'BDC',  to: 'ADST', distKm: 3.2, railType: '52kg', age: 20, signalling: 'Semi-Auto', lastUpgrade: 2012, score: 55, route: 'main' },
+  { from: 'ADST', to: 'MUG',  distKm: 3.0, railType: '52kg', age: 22, signalling: 'Manual',    lastUpgrade: 2010, score: 48, route: 'main' },
+  { from: 'MUG',  to: 'PDA',  distKm: 9.0, railType: '52kg', age: 18, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 58, route: 'main' },
+  { from: 'PDA',  to: 'BOI',  distKm: 8.0, railType: '52kg', age: 16, signalling: 'Semi-Auto', lastUpgrade: 2015, score: 62, route: 'main' },
+  { from: 'BOI',  to: 'MYM',  distKm: 8.0, railType: '52kg', age: 14, signalling: 'Semi-Auto', lastUpgrade: 2016, score: 65, route: 'main' },
+  { from: 'MYM',  to: 'SKG',  distKm: 11.5,railType: '60kg', age: 10, signalling: 'Auto',      lastUpgrade: 2018, score: 75, route: 'main' },
+  { from: 'SKG',  to: 'BWN',  distKm: 10.0,railType: '60kg', age:  8, signalling: 'Auto',      lastUpgrade: 2020, score: 80, route: 'main' },
+  // ── Chord Line ──
+  { from: 'BLY',  to: 'DKAE', distKm: 6.0, railType: '60kg', age:  5, signalling: 'Auto',      lastUpgrade: 2023, score: 88, route: 'chord' },
+  { from: 'DKAE', to: 'KQU',  distKm: 16.0,railType: '52kg', age: 12, signalling: 'Semi-Auto', lastUpgrade: 2018, score: 70, route: 'chord' },
+  { from: 'KQU',  to: 'GRAE', distKm: 22.0,railType: '52kg', age: 16, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 58, route: 'chord' },
+  { from: 'GRAE', to: 'JRAE', distKm: 6.0, railType: '52kg', age: 18, signalling: 'Manual',    lastUpgrade: 2012, score: 50, route: 'chord' },
+  { from: 'JRAE', to: 'SKG',  distKm: 16.0,railType: '52kg', age: 14, signalling: 'Semi-Auto', lastUpgrade: 2016, score: 63, route: 'chord' },
+  // ── Goghat Line ──
+  { from: 'SHE',  to: 'SIU',  distKm: 12.0,railType: '52kg', age: 20, signalling: 'Manual',    lastUpgrade: 2010, score: 45, route: 'goghat' },
+  { from: 'SIU',  to: 'HPL',  distKm: 12.0,railType: '52kg', age: 22, signalling: 'Manual',    lastUpgrade: 2008, score: 40, route: 'goghat' },
+  { from: 'HPL',  to: 'TAK',  distKm: 12.0,railType: '52kg', age: 18, signalling: 'Semi-Auto', lastUpgrade: 2014, score: 55, route: 'goghat' },
+  { from: 'TAK',  to: 'GOGT', distKm: 28.0,railType: '52kg', age: 25, signalling: 'Manual',    lastUpgrade: 2006, score: 35, route: 'goghat' },
 ];
 
 // Risk based on actual platform / level-crossing conditions on this line
