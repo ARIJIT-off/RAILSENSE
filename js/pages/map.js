@@ -4,9 +4,9 @@
 // ═══════════════════════════════════════════════
 
 const TRAIN_COLORS = {
-  main:  { dot: '#10b981', emoji: '🟢', label: 'Main',  bg: 'rgba(16,185,129,0.15)', border: '#10b981' },
-  alt1:  { dot: '#3b82f6', emoji: '🔵', label: 'Alt-1', bg: 'rgba(59,130,246,0.15)', border: '#3b82f6' },
-  alt2:  { dot: '#f59e0b', emoji: '🟠', label: 'Alt-2', bg: 'rgba(245,158,11,0.15)',  border: '#f59e0b' },
+  main: { dot: '#10b981', emoji: '🔴🚆', label: 'Main', bg: 'rgba(16,185,129,0.15)', border: '#10b981' },
+  alt1: { dot: '#3b82f6', emoji: '🔵🚆', label: 'Alt-1', bg: 'rgba(59,130,246,0.15)', border: '#3b82f6' },
+  alt2: { dot: '#f59e0b', emoji: '🟠🚆', label: 'Alt-2', bg: 'rgba(245,158,11,0.15)', border: '#f59e0b' },
 };
 
 const MapPage = {
@@ -26,9 +26,9 @@ const MapPage = {
   _activeSlot: 'main', // 'main' | 'alt1' | 'alt2' | 'all'
 
   _tileLayers: {
-    street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '© OpenStreetMap' },
+    street: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '© OpenStreetMap' },
     satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '© Esri' },
-    hybrid:    { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attr: '© OpenTopoMap' },
+    hybrid: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attr: '© OpenTopoMap' },
   },
 
   render() {
@@ -371,7 +371,7 @@ const MapPage = {
           html: `<div style="position:relative; width:48px; height:48px; display:flex; align-items:center; justify-content:center;">
             <div style="position:absolute; width:48px; height:48px; border-radius:50%; border:2px solid ${color.border}; opacity:0.4; animation:pulse 2s infinite;"></div>
             <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, ${color.border}, ${color.dot}); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 12px ${color.border}80; border:2px solid white; transform:rotate(${heading}deg);">
-              <span style="font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));">🚆</span>
+              <span style="font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));">${color.emoji}</span>
             </div>
             <div style="position:absolute; bottom:-14px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:700; color:white; background:${color.border}; padding:1px 5px; border-radius:3px; white-space:nowrap; font-family:monospace;">#${slot.train.number.slice(-4)}</div>
           </div>`,
@@ -434,15 +434,15 @@ const MapPage = {
         <h4 style="margin-bottom:var(--space-2); color:var(--text-primary);">📍 ${this._fromStation.name} → ${this._toStation.name}</h4>
         <div style="font-size:var(--fs-sm); color:var(--text-muted); margin-bottom:var(--space-2);">${this._trainSlots.length} trains tracked</div>
         ${this._trainSlots.map(slot => {
-          const color = TRAIN_COLORS[slot.key];
-          const depStop = slot.train.route.find(s => s.station === this._fromStation.code);
-          const depMin = depStop ? depStop.departureMin : null;
-          return `<div style="display:flex; align-items:center; gap:8px; margin-top:6px; font-size:13px;">
+        const color = TRAIN_COLORS[slot.key];
+        const depStop = slot.train.route.find(s => s.station === this._fromStation.code);
+        const depMin = depStop ? depStop.departureMin : null;
+        return `<div style="display:flex; align-items:center; gap:8px; margin-top:6px; font-size:13px;">
             <span>${color.emoji}</span>
             <span style="color:var(--text-primary);">#${slot.train.number}</span>
             <span style="color:var(--text-muted);">${depMin ? formatTime(depMin) : ''}</span>
           </div>`;
-        }).join('')}
+      }).join('')}
       `;
       return;
     }
