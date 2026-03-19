@@ -1,17 +1,24 @@
 // ═══════════════════════════════════════════════
 // RailSmart — Delay & Analytics Dashboard
+// Adapts to selected route from Search/MAP-TRACK
 // ═══════════════════════════════════════════════
 
 const AnalyticsPage = {
   name: 'analytics',
   _activeTab: 'delays',
+  _routeStations: null,    // array of station codes on the active route
+  _routeLabel: null,       // e.g. "Konnagar → Bally"
 
   render() {
+    this._loadRoute();
     return `
       <div class="analytics-page">
         <div class="page-header">
           <h1>📊 Delay & Analytics Dashboard</h1>
-          <p>Comprehensive railway performance insights and track health analysis</p>
+          ${this._routeLabel
+            ? `<p>Insights for <strong style="color:var(--accent-cyan);">${this._routeLabel}</strong></p>`
+            : `<p>Comprehensive railway performance insights and track health analysis</p>`
+          }
         </div>
 
         <!-- Stats Overview -->
@@ -25,11 +32,11 @@ const AnalyticsPage = {
             <div class="stat-label">Avg Delay</div>
           </div>
           <div class="stat-card" style="animation: slideUp 0.4s ease both;">
-            <div class="stat-value">${TRACK_SECTIONS.length}</div>
+            <div class="stat-value">${this._getTrackSections().length}</div>
             <div class="stat-label">Track Sections</div>
           </div>
           <div class="stat-card" style="animation: slideUp 0.45s ease both;">
-            <div class="stat-value">${ACCIDENT_HISTORY.length}</div>
+            <div class="stat-value">${this._getAccidents().length}</div>
             <div class="stat-label">Risk Stations</div>
           </div>
         </div>
@@ -48,14 +55,76 @@ const AnalyticsPage = {
     `;
   },
 
+  // ── Load route from localStorage (saved by Search/MAP-TRACK) ──
+  _loadRoute() {
+    const savedRoute = getMapRoute();
+    if (savedRoute && savedRoute.from && savedRoute.to) {
+      const fromSt = findStation(savedRoute.from);
+      const toSt = findStation(savedRoute.to);
+      if (fromSt && toSt) {
+        this._routeLabel = `${fromSt.name} → ${toSt.name}`;
+        // Get all trains between these stations and collect their station codes
+        const trains = searchTrainsBetweenStations(savedRoute.from, savedRoute.to);
+        const codes = new Set();
+        trains.forEach(t => {
+          const fromIdx = t.route.findIndex(s => s.station === savedRoute.from);
+          const toIdx = t.route.findIndex(s => s.station === savedRoute.to);
+          if (fromIdx >= 0 && toIdx >= 0) {
+            const start = Math.min(fromIdx, toIdx);
+            const end = Math.max(fromIdx, toIdx);
+            for (let i = start; i <= end; i++) codes.add(t.route[i].station);
+          }
+        });
+        this._routeStations = codes.size > 0 ? [...codes] : null;
+      }
+    } else {
+      this._routeStations = null;
+      this._routeLabel = null;
+    }
+  },
+
+  // ── Filtered data getters ──
+  _getTrackSections() {
+    if (!this._routeStations) return TRACK_SECTIONS;
+    return TRACK_SECTIONS.filter(s =>
+      this._routeStations.includes(s.from) || this._routeStations.includes(s.to)
+    );
+  },
+
+  _getAccidents() {
+    if (!this._routeStations) return ACCIDENT_HISTORY;
+    return ACCIDENT_HISTORY.filter(a => this._routeStations.includes(a.station));
+  },
+
+  _getPerformance() {
+    if (!this._routeStations) return TRAIN_PERFORMANCE;
+    // Match trains that pass through the route stations
+    const routeTrains = searchTrainsBetweenStations(
+      getMapRoute()?.from, getMapRoute()?.to
+    );
+    const routeNumbers = new Set(routeTrains.map(t => t.number));
+    const filtered = TRAIN_PERFORMANCE.filter(tp => routeNumbers.has(tp.trainNumber));
+    return filtered.length > 0 ? filtered : TRAIN_PERFORMANCE;
+  },
+
+  _getSpeedups() {
+    if (!this._routeStations) return SPEEDUP_OPPORTUNITIES;
+    return SPEEDUP_OPPORTUNITIES.filter(op => {
+      const parts = op.section.split('→').map(s => s.trim());
+      return parts.some(code => this._routeStations.includes(code));
+    });
+  },
+
   _getAvgPunctuality() {
-    const sum = TRAIN_PERFORMANCE.reduce((a, b) => a + b.punctuality, 0);
-    return Math.round(sum / TRAIN_PERFORMANCE.length);
+    const data = this._getPerformance();
+    if (!data.length) return 0;
+    return Math.round(data.reduce((a, b) => a + b.punctuality, 0) / data.length);
   },
 
   _getAvgDelay() {
-    const sum = TRAIN_PERFORMANCE.reduce((a, b) => a + b.avgDelay, 0);
-    return Math.round(sum / TRAIN_PERFORMANCE.length);
+    const data = this._getPerformance();
+    if (!data.length) return 0;
+    return Math.round(data.reduce((a, b) => a + b.avgDelay, 0) / data.length);
   },
 
   init() {
@@ -93,7 +162,7 @@ const AnalyticsPage = {
       <div class="analytics-grid" style="animation: fadeIn 0.3s ease;">
         <div class="analytics-section analytics-full-width">
           <h3>🔗 Delay Causes Breakdown</h3>
-          <p style="margin-bottom:var(--space-5); color:var(--text-tertiary);">Distribution of primary delay causes across the network</p>
+          <p style="margin-bottom:var(--space-5); color:var(--text-tertiary);">Distribution of primary delay causes${this._routeLabel ? ` on ${this._routeLabel}` : ' across the network'}</p>
           <div class="bar-chart">
             ${DELAY_CAUSES.map((cause, i) => `
               <div class="bar-chart-row" style="animation: slideIn 0.3s ease both; animation-delay: ${i * 0.1}s;">
@@ -155,14 +224,16 @@ const AnalyticsPage = {
   },
 
   _renderSpeedup() {
+    const speedups = this._getSpeedups();
     return `
       <div style="animation: fadeIn 0.3s ease;">
         <div class="analytics-section" style="margin-bottom:var(--space-4);">
           <h3>⚡ Speed-Up Opportunities</h3>
-          <p style="color:var(--text-tertiary); margin-bottom:var(--space-5);">Track sections where infrastructure upgrades could significantly reduce journey times</p>
+          <p style="color:var(--text-tertiary); margin-bottom:var(--space-5);">Track sections where infrastructure upgrades could significantly reduce journey times${this._routeLabel ? ` on ${this._routeLabel}` : ''}</p>
         </div>
+        ${speedups.length === 0 ? '<div style="text-align:center; color:var(--text-muted); padding:var(--space-6);">No speed-up data for this route segment</div>' : ''}
         <div style="display:flex; flex-direction:column; gap:var(--space-4);">
-          ${SPEEDUP_OPPORTUNITIES.map((op, i) => `
+          ${speedups.map((op, i) => `
             <div class="card" style="animation: slideUp 0.3s ease both; animation-delay: ${i * 0.1}s;">
               <div class="flex-between" style="margin-bottom:var(--space-3);">
                 <div>
@@ -198,19 +269,21 @@ const AnalyticsPage = {
   },
 
   _renderTrackHealth() {
+    const sections = this._getTrackSections();
     return `
       <div style="animation: fadeIn 0.3s ease;">
         <div class="analytics-section" style="margin-bottom:var(--space-4);">
           <h3>🛤️ Track Health Scores</h3>
-          <p style="color:var(--text-tertiary); margin-bottom:var(--space-3);">Health scores computed from rail age, material, signalling type, and last upgrade year</p>
+          <p style="color:var(--text-tertiary); margin-bottom:var(--space-3);">Health scores${this._routeLabel ? ` for ${this._routeLabel}` : ''} computed from rail age, material, signalling type, and last upgrade year</p>
           <div style="display:flex; gap:var(--space-4); margin-bottom:var(--space-4);">
             <span class="badge badge-ontime">● Good (80+)</span>
             <span class="badge badge-minor-delay">● Fair (60-79)</span>
             <span class="badge badge-major-delay">● Poor (&lt;60)</span>
           </div>
         </div>
+        ${sections.length === 0 ? '<div style="text-align:center; color:var(--text-muted); padding:var(--space-6);">No track health data for this route segment</div>' : ''}
         <div style="display:flex; flex-direction:column; gap:var(--space-2);">
-          ${TRACK_SECTIONS.map((section, i) => {
+          ${sections.map((section, i) => {
             const health = getTrackHealthLabel(section.score);
             return `
               <div class="track-segment" style="animation: slideIn 0.3s ease both; animation-delay: ${i * 0.05}s;">
@@ -232,14 +305,16 @@ const AnalyticsPage = {
   },
 
   _renderRisk() {
+    const accidents = this._getAccidents();
     return `
       <div style="animation: fadeIn 0.3s ease;">
         <div class="analytics-section" style="margin-bottom:var(--space-4);">
-          <h3>⚠️ Historical Accident Risk by Station</h3>
+          <h3>⚠️ Historical Accident Risk${this._routeLabel ? ` — ${this._routeLabel}` : ' by Station'}</h3>
           <p style="color:var(--text-tertiary);">Based on incident records and operational risk assessment</p>
         </div>
+        ${accidents.length === 0 ? '<div style="text-align:center; color:var(--text-muted); padding:var(--space-6);">No risk data for this route segment</div>' : ''}
         <div style="display:flex; flex-direction:column; gap:var(--space-3);">
-          ${ACCIDENT_HISTORY.sort((a, b) => b.incidents - a.incidents).map((entry, i) => {
+          ${accidents.sort((a, b) => b.incidents - a.incidents).map((entry, i) => {
             const style = getRiskLevelStyle(entry.riskLevel);
             const stationInfo = findStation(entry.station);
             return `
@@ -269,11 +344,13 @@ const AnalyticsPage = {
   },
 
   _renderPerformance() {
+    const perf = this._getPerformance();
     return `
       <div style="animation: fadeIn 0.3s ease;">
         <div class="analytics-section analytics-full-width" style="margin-bottom:var(--space-4);">
-          <h3>📈 Train Performance — Punctuality & Average Delay</h3>
+          <h3>📈 Train Performance${this._routeLabel ? ` — ${this._routeLabel}` : ''}</h3>
         </div>
+        ${perf.length === 0 ? '<div style="text-align:center; color:var(--text-muted); padding:var(--space-6);">No performance data for this route</div>' : ''}
         <div class="card-flat" style="overflow-x:auto;">
           <table class="pnr-table">
             <thead>
@@ -288,7 +365,7 @@ const AnalyticsPage = {
               </tr>
             </thead>
             <tbody>
-              ${TRAIN_PERFORMANCE.sort((a, b) => b.punctuality - a.punctuality).map((tp, i) => {
+              ${perf.sort((a, b) => b.punctuality - a.punctuality).map((tp, i) => {
                 const pColor = tp.punctuality >= 85 ? 'var(--status-ontime)' : tp.punctuality >= 75 ? 'var(--status-minor-delay)' : 'var(--status-major-delay)';
                 const trend = tp.punctuality >= 85 ? '📈' : tp.punctuality >= 75 ? '➡️' : '📉';
                 return `
