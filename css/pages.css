@@ -256,11 +256,31 @@
   backdrop-filter: blur(var(--blur-md));
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  width: clamp(220px, 25vw, 300px);
+  padding: var(--space-3);
+  width: clamp(240px, 28vw, 340px);
+}
+
+.map-station-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .map-info-panel {
+  position: absolute;
+  bottom: var(--space-3);
+  right: var(--space-3);
+  z-index: var(--z-above);
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--blur-md));
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  width: clamp(220px, 25vw, 320px);
+}
+
+/* ── Train Comparison Sidebar ── */
+.map-train-sidebar {
   position: absolute;
   bottom: var(--space-3);
   left: var(--space-3);
@@ -269,8 +289,86 @@
   backdrop-filter: blur(var(--blur-md));
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  width: clamp(220px, 25vw, 320px);
+  width: clamp(200px, 22vw, 280px);
+  overflow: hidden;
+}
+
+.train-sidebar-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.train-slot-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: background 0.2s ease;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.train-slot-btn:last-child { border-bottom: none; }
+
+.train-slot-btn:hover { background: var(--bg-tertiary); }
+
+.train-slot-btn.active {
+  box-shadow: inset 0 0 12px rgba(255,255,255,0.03);
+}
+
+.slot-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.slot-emoji { font-size: 14px; }
+
+.slot-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.slot-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.slot-details {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.slot-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.slot-badge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+}
+
+.slot-eta {
+  font-size: 11px;
+  color: var(--accent-green);
+  margin-top: 3px;
+  font-weight: 500;
 }
 
 /* ────────────── Analytics Page ────────────── */

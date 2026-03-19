@@ -1,32 +1,34 @@
 // ═══════════════════════════════════════════════
 // RailSmart — Live Map View Page
+// Multi-Train Comparison: Main + 2 Alternatives
 // ═══════════════════════════════════════════════
+
+const TRAIN_COLORS = {
+  main:  { dot: '#10b981', emoji: '🟢', label: 'Main',  bg: 'rgba(16,185,129,0.15)', border: '#10b981' },
+  alt1:  { dot: '#3b82f6', emoji: '🔵', label: 'Alt-1', bg: 'rgba(59,130,246,0.15)', border: '#3b82f6' },
+  alt2:  { dot: '#f59e0b', emoji: '🟠', label: 'Alt-2', bg: 'rgba(245,158,11,0.15)',  border: '#f59e0b' },
+};
 
 const MapPage = {
   name: 'map',
   _map: null,
-  _selectedTrain: null,
-  _liveData: null,
-  _routeLine: null,
-  _trainMarker: null,
-  _stationMarkers: [],
+  _tileLayer: null,
+  _currentLayer: 'street',
   _animFrameId: null,
   _refreshInterval: null,
-  _currentLayer: 'street',
+
+  // Station selection
+  _fromStation: null,
+  _toStation: null,
+
+  // 3-train comparison
+  _trainSlots: [],     // [{train, liveData, marker, stationMarkers}]
+  _activeSlot: 'main', // 'main' | 'alt1' | 'alt2' | 'all'
 
   _tileLayers: {
-    street: {
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attr: '© OpenStreetMap contributors',
-    },
-    satellite: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      attr: '© Esri',
-    },
-    hybrid: {
-      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-      attr: '© OpenTopoMap',
-    },
+    street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '© OpenStreetMap' },
+    satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '© Esri' },
+    hybrid:    { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attr: '© OpenTopoMap' },
   },
 
   render() {
@@ -36,13 +38,20 @@ const MapPage = {
           <div id="map"></div>
         </div>
 
-        <!-- Train Selector -->
-        <div class="map-train-selector" id="map-train-selector">
-          <h4 style="margin-bottom:var(--space-3); color:var(--text-primary);">🚆 Select Train</h4>
-          <select class="select" id="map-train-select">
-            <option value="">Choose a train...</option>
-            ${TRAINS.map(t => `<option value="${t.number}">${t.number} — ${t.name}</option>`).join('')}
-          </select>
+        <!-- Station Selector (top-left) -->
+        <div class="map-train-selector" id="map-station-selector">
+          <h4 style="margin-bottom:var(--space-2); color:var(--text-primary);">📍 Select Route</h4>
+          <div class="map-station-inputs">
+            <div class="autocomplete" id="map-from-ac" style="position:relative;">
+              <input class="input" type="text" placeholder="From station..." id="map-from-input" autocomplete="off" style="font-size:13px; padding:8px 10px;">
+              <div class="autocomplete-dropdown" id="map-from-dropdown" style="display:none; position:absolute; z-index:9999; width:100%; max-height:250px; overflow-y:auto; background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:8px; top:100%;"></div>
+            </div>
+            <span style="color:var(--text-muted); text-align:center; font-size:16px;">→</span>
+            <div class="autocomplete" id="map-to-ac" style="position:relative;">
+              <input class="input" type="text" placeholder="To station..." id="map-to-input" autocomplete="off" style="font-size:13px; padding:8px 10px;">
+              <div class="autocomplete-dropdown" id="map-to-dropdown" style="display:none; position:absolute; z-index:9999; width:100%; max-height:250px; overflow-y:auto; background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:8px; top:100%;"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Layer Toggle -->
@@ -54,52 +63,30 @@ const MapPage = {
           </div>
         </div>
 
-        <!-- Info Panel -->
+        <!-- Train Comparison Sidebar (bottom-left) -->
+        <div id="map-train-sidebar" class="map-train-sidebar" style="display:none;"></div>
+
+        <!-- Info Panel (bottom-right) -->
         <div class="map-info-panel" id="map-info-panel" style="display:none;"></div>
       </div>
     `;
   },
 
   init() {
-    // Small delay to let DOM settle
     setTimeout(() => {
       this._initMap();
       this._bindEvents();
-
-      // Load saved train
-      const saved = getSelectedTrain();
-      if (saved) {
-        const sel = $('#map-train-select');
-        if (sel) sel.value = saved;
-        this._loadTrain(saved);
-      }
     }, 100);
   },
 
   _initMap() {
     if (this._map) return;
-
-    this._map = L.map('map', {
-      center: [22.76, 88.37],
-      zoom: 12,
-      zoomControl: true,
-      attributionControl: true,
-    });
-
-    this._tileLayer = L.tileLayer(this._tileLayers.street.url, {
-      attribution: this._tileLayers.street.attr,
-      maxZoom: 18,
-    }).addTo(this._map);
+    this._map = L.map('map', { center: [22.76, 88.37], zoom: 12, zoomControl: true, attributionControl: true });
+    this._tileLayer = L.tileLayer(this._tileLayers.street.url, { attribution: this._tileLayers.street.attr, maxZoom: 18 }).addTo(this._map);
   },
 
   _bindEvents() {
-    on(document, 'change', (e) => {
-      if (e.target.id === 'map-train-select') {
-        const num = e.target.value;
-        if (num) this._loadTrain(num);
-      }
-    });
-
+    // Layer buttons
     on(document, 'click', (e) => {
       const layerBtn = e.target.closest('[data-layer]');
       if (layerBtn) {
@@ -107,7 +94,352 @@ const MapPage = {
         $$('.map-layer-btn').forEach(b => b.classList.remove('active'));
         layerBtn.classList.add('active');
       }
+
+      // Train slot selector
+      const slotBtn = e.target.closest('[data-slot]');
+      if (slotBtn) {
+        this._activeSlot = slotBtn.dataset.slot;
+        this._renderTrains();
+        this._updateSidebarActive();
+      }
     });
+
+    // Autocomplete inputs
+    const setupAC = (inputId, dropdownId, which) => {
+      on(document, 'input', (e) => {
+        if (e.target.id === inputId) this._showMapAutocomplete(which, e.target.value);
+      });
+      on(document, 'focus', (e) => {
+        if (e.target.id === inputId) this._showMapAutocomplete(which, e.target.value, true);
+      }, true);
+      on(document, 'click', (e) => {
+        if (!e.target.closest(`#${which === 'from' ? 'map-from-ac' : 'map-to-ac'}`)) {
+          const dd = $(`#${dropdownId}`);
+          if (dd) dd.style.display = 'none';
+        }
+      });
+    };
+    setupAC('map-from-input', 'map-from-dropdown', 'from');
+    setupAC('map-to-input', 'map-to-dropdown', 'to');
+  },
+
+  _showMapAutocomplete(which, query, showAll = false) {
+    const dropdown = $(`#map-${which}-dropdown`);
+    if (!dropdown) return;
+
+    let matches;
+    if (query && query.trim()) {
+      matches = searchStations(query);
+    } else if (showAll) {
+      matches = STATIONS.slice(0, 50);
+    } else {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    if (!matches.length) { dropdown.style.display = 'none'; return; }
+
+    dropdown.innerHTML = matches.map(s => `
+      <div class="autocomplete-option" data-code="${s.code}" data-which="${which}" style="padding:8px 12px; cursor:pointer; display:flex; gap:8px; align-items:center; border-bottom:1px solid var(--border-subtle);">
+        <span style="font-weight:600; color:var(--accent-cyan); min-width:45px; font-size:12px;">${s.code}</span>
+        <span style="color:var(--text-primary); font-size:13px;">${s.name}</span>
+        <span style="color:var(--text-muted); font-size:11px; margin-left:auto;">${s.city}</span>
+      </div>
+    `).join('');
+    dropdown.style.display = 'block';
+
+    $$('.autocomplete-option', dropdown).forEach(opt => {
+      opt.onmouseenter = () => opt.style.background = 'var(--bg-tertiary)';
+      opt.onmouseleave = () => opt.style.background = '';
+      opt.onclick = () => {
+        const code = opt.dataset.code;
+        const station = findStation(code);
+        if (which === 'from') {
+          this._fromStation = station;
+          const inp = $('#map-from-input');
+          if (inp) inp.value = `${station.name} (${station.code})`;
+        } else {
+          this._toStation = station;
+          const inp = $('#map-to-input');
+          if (inp) inp.value = `${station.name} (${station.code})`;
+        }
+        dropdown.style.display = 'none';
+
+        // If both selected, find trains
+        if (this._fromStation && this._toStation) {
+          this._findAndShowTrains();
+        }
+      };
+    });
+  },
+
+  _findAndShowTrains() {
+    const fromCode = this._fromStation.code;
+    const toCode = this._toStation.code;
+
+    // Find all trains passing through both stations
+    const allTrains = searchTrainsBetweenStations(fromCode, toCode);
+    if (!allTrains.length) {
+      this._showNoTrains();
+      return;
+    }
+
+    // Sort by nearest departure from `from` station
+    const nowMin = getCurrentSimMinutes();
+    allTrains.sort((a, b) => {
+      const aStop = a.route.find(s => s.station === fromCode);
+      const bStop = b.route.find(s => s.station === fromCode);
+      const aDep = aStop ? aStop.departureMin : 9999;
+      const bDep = bStop ? bStop.departureMin : 9999;
+      const aDiff = (aDep - nowMin + 1440) % 1440;
+      const bDiff = (bDep - nowMin + 1440) % 1440;
+      return aDiff - bDiff;
+    });
+
+    // Pick top 3
+    const top3 = allTrains.slice(0, 3);
+    const slotKeys = ['main', 'alt1', 'alt2'];
+    this._trainSlots = top3.map((train, i) => ({
+      key: slotKeys[i],
+      train,
+      liveData: generateLiveData(train),
+      marker: null,
+      stationMarkers: [],
+    }));
+
+    this._activeSlot = 'main';
+    this._renderSidebar();
+    this._renderTrains();
+    this._startAnimation();
+    this._startAutoRefresh();
+  },
+
+  _showNoTrains() {
+    const sidebar = $('#map-train-sidebar');
+    if (sidebar) {
+      sidebar.style.display = 'block';
+      sidebar.innerHTML = `
+        <div style="padding:16px; text-align:center; color:var(--text-muted);">
+          <div style="font-size:24px; margin-bottom:8px;">🚫</div>
+          <div>No trains found between<br><strong>${this._fromStation.name}</strong> → <strong>${this._toStation.name}</strong></div>
+        </div>
+      `;
+    }
+  },
+
+  _renderSidebar() {
+    const sidebar = $('#map-train-sidebar');
+    if (!sidebar) return;
+
+    const nowMin = getCurrentSimMinutes();
+    let html = `<div class="train-sidebar-content">`;
+
+    this._trainSlots.forEach((slot, i) => {
+      const color = TRAIN_COLORS[slot.key];
+      const depStop = slot.train.route.find(s => s.station === this._fromStation.code);
+      const depMin = depStop ? depStop.departureMin : null;
+      const depTime = depMin !== null ? formatTime(depMin) : '--:--';
+      const minsAway = depMin !== null ? ((depMin - nowMin + 1440) % 1440) : null;
+      const minsLabel = minsAway !== null ? (minsAway <= 0 ? 'Now' : `in ${minsAway}m`) : '';
+
+      html += `
+        <button class="train-slot-btn ${this._activeSlot === slot.key ? 'active' : ''}" data-slot="${slot.key}"
+          style="border-left:4px solid ${color.border}; ${this._activeSlot === slot.key ? `background:${color.bg};` : ''}">
+          <div class="slot-header">
+            <span class="slot-emoji">${color.emoji}</span>
+            <span class="slot-label">${color.label}</span>
+            <span class="slot-time">${depTime}</span>
+          </div>
+          <div class="slot-details">
+            <span class="slot-name">${slot.train.name}</span>
+            <span class="slot-badge">#${slot.train.number}</span>
+          </div>
+          <div class="slot-eta">${minsLabel}</div>
+        </button>
+      `;
+    });
+
+    // ALL button
+    html += `
+      <button class="train-slot-btn train-slot-all ${this._activeSlot === 'all' ? 'active' : ''}" data-slot="all"
+        style="border-left:4px solid var(--text-muted); ${this._activeSlot === 'all' ? 'background:rgba(148,163,184,0.15);' : ''}">
+        <div class="slot-header">
+          <span class="slot-emoji">🔷</span>
+          <span class="slot-label">All Trains</span>
+        </div>
+        <div class="slot-details" style="color:var(--text-muted);">View all ${this._trainSlots.length} trains at once</div>
+      </button>
+    `;
+
+    html += `</div>`;
+    sidebar.style.display = 'block';
+    sidebar.innerHTML = html;
+  },
+
+  _updateSidebarActive() {
+    $$('.train-slot-btn').forEach(btn => {
+      const slot = btn.dataset.slot;
+      const isActive = slot === this._activeSlot;
+      btn.classList.toggle('active', isActive);
+      if (slot === 'all') {
+        btn.style.background = isActive ? 'rgba(148,163,184,0.15)' : '';
+      } else {
+        const color = TRAIN_COLORS[slot];
+        if (color) btn.style.background = isActive ? color.bg : '';
+      }
+    });
+    this._updateInfoPanel();
+  },
+
+  _renderTrains() {
+    this._clearMap();
+    if (!this._trainSlots.length) return;
+
+    const slotsToRender = this._activeSlot === 'all'
+      ? this._trainSlots
+      : this._trainSlots.filter(s => s.key === this._activeSlot);
+
+    const allLatLngs = [];
+
+    slotsToRender.forEach(slot => {
+      const color = TRAIN_COLORS[slot.key];
+      const route = slot.liveData.liveRoute;
+
+      // Station markers
+      route.forEach((stop, i) => {
+        if (!stop.stationInfo) return;
+        const isCurrent = i === slot.liveData.currentStationIdx;
+        const isPassed = stop.hasPassed;
+        let fill = '#64748b', rad = 5, fop = 0.6;
+        if (isPassed) { fill = color.dot; fop = 0.8; }
+        if (isCurrent) { fill = color.dot; rad = 9; fop = 1; }
+
+        const marker = L.circleMarker([stop.stationInfo.lat, stop.stationInfo.lng], {
+          radius: rad, fillColor: fill, fillOpacity: fop, color: 'white', weight: 2, opacity: 0.9,
+        }).addTo(this._map);
+
+        marker.bindPopup(`
+          <div style="font-family:Inter,sans-serif; font-size:13px; min-width:140px;">
+            <strong>${stop.stationInfo.name}</strong> (${stop.station})
+            ${stop.arrivalMin ? `<br>Arr: ${formatTime(stop.actualArrival || stop.arrivalMin)}` : ''}
+            ${stop.departureMin ? `<br>Dep: ${formatTime(stop.actualDeparture || stop.departureMin)}` : ''}
+            ${stop.delay > 0 ? `<br><span style="color:#f59e0b;">+${stop.delay}min</span>` : `<br><span style="color:#10b981;">On Time</span>`}
+          </div>
+        `);
+
+        slot.stationMarkers.push(marker);
+        allLatLngs.push([stop.stationInfo.lat, stop.stationInfo.lng]);
+      });
+
+      // Train emoji marker
+      const pos = this._getSlotTrainPosition(slot);
+      if (pos) {
+        const heading = this._getSlotHeading(slot);
+        const emojiLabel = this._activeSlot === 'all' ? color.emoji : '🚆';
+        const trainIcon = L.divIcon({
+          html: `<div class="map-train-icon" style="transform:rotate(${heading}deg);">
+                   <div class="map-train-pulse" style="border-color:${color.border};"></div>
+                   <div class="map-train-svg">${emojiLabel}</div>
+                 </div>`,
+          className: 'train-marker-container',
+          iconSize: [40, 40], iconAnchor: [20, 20],
+        });
+        slot.marker = L.marker(pos, { icon: trainIcon, zIndexOffset: 1000 }).addTo(this._map);
+      }
+    });
+
+    // Fit bounds
+    if (allLatLngs.length > 1) {
+      this._map.fitBounds(allLatLngs, { padding: [60, 60] });
+    }
+
+    this._updateInfoPanel();
+  },
+
+  _getSlotTrainPosition(slot) {
+    const route = slot.liveData.liveRoute;
+    const currentIdx = slot.liveData.currentStationIdx;
+    const nextIdx = Math.min(currentIdx + 1, route.length - 1);
+    const curr = route[currentIdx], next = route[nextIdx];
+    if (!curr.stationInfo || !next.stationInfo) return null;
+
+    if (currentIdx === nextIdx) {
+      return [curr.stationInfo.lat, curr.stationInfo.lng];
+    }
+
+    const currentMin = getCurrentSimMinutes();
+    const depTime = curr.actualDeparture || curr.actualArrival;
+    const arrTime = next.actualArrival || next.actualDeparture;
+    if (!depTime || !arrTime) return [curr.stationInfo.lat, curr.stationInfo.lng];
+
+    let progress = (currentMin - depTime) / (arrTime - depTime);
+    progress = Math.max(0, Math.min(1, progress));
+
+    const lat = curr.stationInfo.lat + (next.stationInfo.lat - curr.stationInfo.lat) * progress;
+    const lng = curr.stationInfo.lng + (next.stationInfo.lng - curr.stationInfo.lng) * progress;
+    return [lat, lng];
+  },
+
+  _getSlotHeading(slot) {
+    const route = slot.liveData.liveRoute;
+    const idx = slot.liveData.currentStationIdx;
+    const nxt = Math.min(idx + 1, route.length - 1);
+    const c = route[idx], n = route[nxt];
+    if (!c.stationInfo || !n.stationInfo || idx === nxt) return 0;
+    return Math.atan2(n.stationInfo.lng - c.stationInfo.lng, n.stationInfo.lat - c.stationInfo.lat) * 180 / Math.PI;
+  },
+
+  _updateInfoPanel() {
+    const panel = $('#map-info-panel');
+    if (!panel || !this._trainSlots.length) return;
+
+    if (this._activeSlot === 'all') {
+      const currentMin = getCurrentSimMinutes();
+      panel.style.display = 'block';
+      panel.innerHTML = `
+        <h4 style="margin-bottom:var(--space-2); color:var(--text-primary);">📍 ${this._fromStation.name} → ${this._toStation.name}</h4>
+        <div style="font-size:var(--fs-sm); color:var(--text-muted); margin-bottom:var(--space-2);">${this._trainSlots.length} trains tracked</div>
+        ${this._trainSlots.map(slot => {
+          const color = TRAIN_COLORS[slot.key];
+          const depStop = slot.train.route.find(s => s.station === this._fromStation.code);
+          const depMin = depStop ? depStop.departureMin : null;
+          return `<div style="display:flex; align-items:center; gap:8px; margin-top:6px; font-size:13px;">
+            <span>${color.emoji}</span>
+            <span style="color:var(--text-primary);">#${slot.train.number}</span>
+            <span style="color:var(--text-muted);">${depMin ? formatTime(depMin) : ''}</span>
+          </div>`;
+        }).join('')}
+      `;
+      return;
+    }
+
+    const slot = this._trainSlots.find(s => s.key === this._activeSlot);
+    if (!slot) { panel.style.display = 'none'; return; }
+
+    const color = TRAIN_COLORS[slot.key];
+    const data = slot.liveData;
+    const delayInfo = getDelayInfo(data.overallDelay);
+    const currStation = data.liveRoute[data.currentStationIdx];
+    const currentMin = getCurrentSimMinutes();
+    const depStop = slot.train.route.find(s => s.station === this._fromStation.code);
+    const arrStop = slot.train.route.find(s => s.station === this._toStation.code);
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:var(--space-2);">
+        <span style="font-size:18px;">${color.emoji}</span>
+        <h4 style="color:var(--text-primary); margin:0;">${slot.train.name}</h4>
+      </div>
+      <div style="font-size:var(--fs-sm); color:var(--text-tertiary); margin-bottom:var(--space-2);">#${slot.train.number} · ${color.label}</div>
+      <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; font-size:var(--fs-sm);">
+        <span class="badge ${delayInfo.class}">${delayInfo.label}</span>
+        <span style="color:var(--text-secondary);">📍 ${currStation.stationInfo?.name || currStation.station}</span>
+      </div>
+      <div style="margin-top:var(--space-2); font-size:var(--fs-sm); color:var(--text-secondary);">
+        ${depStop ? `Dep ${this._fromStation.code}: <strong>${formatTime(depStop.departureMin)}</strong>` : ''}
+        ${arrStop ? ` · Arr ${this._toStation.code}: <strong>${formatTime(arrStop.arrivalMin)}</strong>` : ''}
+      </div>
+    `;
   },
 
   _switchLayer(layerName) {
@@ -115,267 +447,46 @@ const MapPage = {
     this._currentLayer = layerName;
     const layer = this._tileLayers[layerName];
     this._tileLayer.setUrl(layer.url);
-    this._tileLayer.options.attribution = layer.attr;
-  },
-
-  _loadTrain(trainNumber) {
-    const train = TRAINS.find(t => t.number === trainNumber);
-    if (!train) return;
-
-    this._selectedTrain = train;
-    this._liveData = generateLiveData(train);
-    this._drawRoute();
-    this._updateInfoPanel();
-    this._startAnimation();
-    this._startAutoRefresh();
-  },
-
-  _drawRoute() {
-    if (!this._map || !this._liveData) return;
-
-    // Clear previous
-    this._clearMap();
-
-    const route = this._liveData.liveRoute;
-
-    // Build track path using real railway waypoints (for train interpolation only)
-    const stationCodes = route.map(s => s.station);
-    const coords = getTrackPath(stationCodes);
-
-    // Draw station markers
-    route.forEach((stop, i) => {
-      if (!stop.stationInfo) return;
-
-      const isCurrent = i === this._liveData.currentStationIdx;
-      const isPassed = stop.hasPassed;
-
-      let markerColor = '#64748b'; // upcoming
-      let radius = 6;
-      let fillOpacity = 0.7;
-
-      if (isPassed) {
-        markerColor = '#10b981'; // green for passed
-        fillOpacity = 0.9;
-      }
-      if (isCurrent) {
-        markerColor = '#3b82f6'; // blue for current
-        radius = 10;
-        fillOpacity = 1;
-      }
-
-      const marker = L.circleMarker([stop.stationInfo.lat, stop.stationInfo.lng], {
-        radius: radius,
-        fillColor: markerColor,
-        fillOpacity: fillOpacity,
-        color: 'white',
-        weight: 2,
-        opacity: 0.9,
-      }).addTo(this._map);
-
-      // Popup
-      const delayText = stop.delay > 0 ? `<br><span style="color:#f59e0b;">Delayed: +${stop.delay}min</span>` : '<br><span style="color:#10b981;">On Time</span>';
-      marker.bindPopup(`
-        <div style="font-family:Inter,sans-serif; font-size:13px; min-width:160px;">
-          <strong>${stop.stationInfo.name}</strong> (${stop.station})
-          <br>Platform: ${stop.platform}
-          ${stop.arrivalMin ? `<br>Arr: ${formatTime(stop.arrivalMin)} → ${formatTime(stop.actualArrival)}` : ''}
-          ${stop.departureMin ? `<br>Dep: ${formatTime(stop.departureMin)} → ${formatTime(stop.actualDeparture)}` : ''}
-          ${delayText}
-        </div>
-      `);
-
-      this._stationMarkers.push(marker);
-    });
-
-    // Add train icon
-    this._addTrainMarker();
-
-    // Fit bounds
-    this._map.fitBounds(this._routeLine.getBounds(), { padding: [50, 50] });
-  },
-
-  _addTrainMarker() {
-    if (!this._liveData) return;
-
-    const pos = this._getTrainPosition();
-    if (!pos) return;
-
-    const heading = this._getTrainHeading();
-
-    const trainIcon = L.divIcon({
-      html: `
-        <div class="map-train-icon" style="transform: rotate(${heading}deg);">
-          <div class="map-train-pulse"></div>
-          <div class="map-train-svg">🚆</div>
-        </div>
-      `,
-      className: 'train-marker-container',
-      iconSize: [40, 40],
-      iconAnchor: [20, 20],
-    });
-
-    this._trainMarker = L.marker(pos, { icon: trainIcon, zIndexOffset: 1000 }).addTo(this._map);
-  },
-
-  _getTrainPosition() {
-    if (!this._liveData) return null;
-
-    const route = this._liveData.liveRoute;
-    const currentIdx = this._liveData.currentStationIdx;
-    const nextIdx = Math.min(currentIdx + 1, route.length - 1);
-
-    const currentStop = route[currentIdx];
-    const nextStop    = route[nextIdx];
-
-    if (!currentStop.stationInfo || !nextStop.stationInfo) return null;
-
-    if (currentIdx === nextIdx) {
-      // At last station — snap to nearest track point
-      const idx = getClosestTrackIdx(currentStop.stationInfo.lat, currentStop.stationInfo.lng);
-      return TRACK_GEOMETRY[idx] || [currentStop.stationInfo.lat, currentStop.stationInfo.lng];
-    }
-
-    // Time-based progress between the two stations
-    const currentMin  = getCurrentSimMinutes();
-    const departTime  = currentStop.actualDeparture || currentStop.actualArrival;
-    const arriveTime  = nextStop.actualArrival      || nextStop.actualDeparture;
-
-    if (!departTime || !arriveTime) {
-      const idx = getClosestTrackIdx(currentStop.stationInfo.lat, currentStop.stationInfo.lng);
-      return TRACK_GEOMETRY[idx] || [currentStop.stationInfo.lat, currentStop.stationInfo.lng];
-    }
-
-    let progress = (currentMin - departTime) / (arriveTime - departTime);
-    progress = Math.max(0, Math.min(1, progress));
-
-    // Interpolate ALONG the track geometry, not a straight line between stations
-    if (typeof TRACK_GEOMETRY !== 'undefined' && TRACK_GEOMETRY.length) {
-      const idx1 = getClosestTrackIdx(currentStop.stationInfo.lat, currentStop.stationInfo.lng);
-      const idx2 = getClosestTrackIdx(nextStop.stationInfo.lat,    nextStop.stationInfo.lng);
-      const targetIdx = Math.round(idx1 + (idx2 - idx1) * progress);
-      const clamped   = Math.max(0, Math.min(TRACK_GEOMETRY.length - 1, targetIdx));
-      return TRACK_GEOMETRY[clamped];
-    }
-
-    // Fallback: straight-line interpolation
-    const lat = currentStop.stationInfo.lat + (nextStop.stationInfo.lat - currentStop.stationInfo.lat) * progress;
-    const lng = currentStop.stationInfo.lng + (nextStop.stationInfo.lng - currentStop.stationInfo.lng) * progress;
-    return [lat, lng];
-  },
-
-  _getTrainHeading() {
-    if (!this._liveData) return 0;
-
-    // Use TRACK_GEOMETRY to get accurate heading along the actual track curve
-    if (typeof TRACK_GEOMETRY !== 'undefined' && TRACK_GEOMETRY.length > 1) {
-      const pos = this._getTrainPosition();
-      if (!pos) return 0;
-
-      // Find the index of the current position in TRACK_GEOMETRY
-      let minD = Infinity, idx = 0;
-      for (let i = 0; i < TRACK_GEOMETRY.length; i++) {
-        const [tLat, tLng] = TRACK_GEOMETRY[i];
-        const d = (pos[0] - tLat) * (pos[0] - tLat) + (pos[1] - tLng) * (pos[1] - tLng);
-        if (d < minD) { minD = d; idx = i; }
-      }
-
-      // Use next point for direction
-      const nextIdx = Math.min(idx + 1, TRACK_GEOMETRY.length - 1);
-      const dLat = TRACK_GEOMETRY[nextIdx][0] - TRACK_GEOMETRY[idx][0];
-      const dLng = TRACK_GEOMETRY[nextIdx][1] - TRACK_GEOMETRY[idx][1];
-      return (Math.atan2(dLng, dLat) * 180 / Math.PI);
-    }
-
-    // Fallback
-    const route = this._liveData.liveRoute;
-    const currentIdx = this._liveData.currentStationIdx;
-    const nextIdx = Math.min(currentIdx + 1, route.length - 1);
-    const curr = route[currentIdx];
-    const next = route[nextIdx];
-    if (!curr.stationInfo || !next.stationInfo || currentIdx === nextIdx) return 0;
-    const dLat = next.stationInfo.lat - curr.stationInfo.lat;
-    const dLng = next.stationInfo.lng - curr.stationInfo.lng;
-    return (Math.atan2(dLng, dLat) * 180 / Math.PI);
   },
 
   _startAnimation() {
     this._stopAnimation();
-
     const animate = () => {
-      if (this._trainMarker && this._liveData) {
-        const pos = this._getTrainPosition();
-        if (pos) {
-          this._trainMarker.setLatLng(pos);
-        }
-      }
+      this._trainSlots.forEach(slot => {
+        if (!slot.marker) return;
+        const show = this._activeSlot === 'all' || this._activeSlot === slot.key;
+        if (!show) return;
+        const pos = this._getSlotTrainPosition(slot);
+        if (pos) slot.marker.setLatLng(pos);
+      });
       this._animFrameId = requestAnimationFrame(animate);
     };
-
     this._animFrameId = requestAnimationFrame(animate);
   },
 
   _stopAnimation() {
-    if (this._animFrameId) {
-      cancelAnimationFrame(this._animFrameId);
-      this._animFrameId = null;
-    }
+    if (this._animFrameId) { cancelAnimationFrame(this._animFrameId); this._animFrameId = null; }
   },
 
   _startAutoRefresh() {
     if (this._refreshInterval) clearInterval(this._refreshInterval);
     this._refreshInterval = setInterval(() => {
-      if (this._selectedTrain) {
-        this._liveData = generateLiveData(this._selectedTrain);
-        this._drawRoute();
-        this._updateInfoPanel();
-      }
+      this._trainSlots.forEach(slot => { slot.liveData = generateLiveData(slot.train); });
+      this._renderTrains();
+      this._renderSidebar();
     }, 60000);
   },
 
-  _updateInfoPanel() {
-    const panel = $('#map-info-panel');
-    if (!panel || !this._liveData) return;
-
-    const data = this._liveData;
-    const delayInfo = getDelayInfo(data.overallDelay);
-    const currentStation = data.liveRoute[data.currentStationIdx];
-    const finalStation = data.liveRoute[data.liveRoute.length - 1];
-    const currentMin = getCurrentSimMinutes();
-    const eta = finalStation.actualArrival ? getCountdown(finalStation.actualArrival, currentMin) : '--';
-
-    panel.style.display = 'block';
-    panel.innerHTML = `
-      <h4 style="margin-bottom:var(--space-2); color:var(--text-primary);">${data.name}</h4>
-      <div style="font-size:var(--fs-sm); color:var(--text-tertiary); margin-bottom:var(--space-3);">#${data.number}</div>
-      <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; font-size:var(--fs-sm);">
-        <span class="badge ${delayInfo.class}">${delayInfo.label}</span>
-        <span style="color:var(--text-secondary);">📍 ${currentStation.stationInfo?.name || currentStation.station}</span>
-      </div>
-      <div style="margin-top:var(--space-3); font-size:var(--fs-sm); color:var(--text-secondary);">
-        🏁 ${finalStation.stationInfo?.name || finalStation.station}: <strong style="color:var(--accent-cyan);">${eta}</strong>
-      </div>
-    `;
-  },
-
   _clearMap() {
-    if (this._routeLine) {
-      this._map.removeLayer(this._routeLine);
-      this._routeLine = null;
-    }
-    if (this._trainMarker) {
-      this._map.removeLayer(this._trainMarker);
-      this._trainMarker = null;
-    }
-    this._stationMarkers.forEach(m => this._map.removeLayer(m));
-    this._stationMarkers = [];
+    this._trainSlots.forEach(slot => {
+      if (slot.marker) { this._map.removeLayer(slot.marker); slot.marker = null; }
+      if (slot.stationMarkers) { slot.stationMarkers.forEach(m => this._map.removeLayer(m)); slot.stationMarkers = []; }
+    });
   },
 
   destroy() {
     this._stopAnimation();
     if (this._refreshInterval) clearInterval(this._refreshInterval);
-    if (this._map) {
-      this._map.remove();
-      this._map = null;
-    }
+    if (this._map) { this._map.remove(); this._map = null; }
   }
 };
