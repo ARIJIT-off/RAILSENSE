@@ -158,14 +158,6 @@ const JourneyPage = {
     this._clearMap();
 
     const route = this._liveData.liveRoute;
-    const stationCodes = route.map(s => s.station);
-    const coords = getTrackPath(stationCodes);
-
-    this._routeLine = L.polyline(coords, {
-      color: '#475569',
-      weight: 3,
-      opacity: 0.5,
-    }).addTo(this._map);
 
     route.forEach((stop) => {
       if (!stop.stationInfo) return;
@@ -179,7 +171,9 @@ const JourneyPage = {
       this._markers.push(marker);
     });
 
-    this._map.fitBounds(this._routeLine.getBounds(), { padding: [50, 50] });
+    // Fit map to station markers
+    const stationCoords = route.filter(s => s.stationInfo).map(s => [s.stationInfo.lat, s.stationInfo.lng]);
+    if (stationCoords.length > 0) this._map.fitBounds(stationCoords, { padding: [50, 50] });
   },
 
   _drawJourney() {
@@ -193,25 +187,8 @@ const JourneyPage = {
     if (boardingIdx === -1 || destIdx === -1 || boardingIdx >= destIdx) return;
 
     const currentIdx = this._liveData.currentStationIdx;
-    const allStationCodes = route.map(s => s.station);
-    const allCoords = getTrackPath(allStationCodes);
 
-    // Draw faded full route along real track
-    L.polyline(allCoords, {
-      color: '#334155',
-      weight: 2,
-      opacity: 0.3,
-      dashArray: '8,8',
-    }).addTo(this._map);
-
-    // Draw journey segment highlighted along real track
-    const journeyStationCodes = allStationCodes.slice(boardingIdx, destIdx + 1);
-    const journeyCoords = getTrackPath(journeyStationCodes);
-    this._routeLine = L.polyline(journeyCoords, {
-      color: '#000000',
-      weight: 5,
-      opacity: 0.9,
-    }).addTo(this._map);
+    // No polylines — just markers and train
 
     // Station markers with journey-specific styling
     route.forEach((stop, i) => {

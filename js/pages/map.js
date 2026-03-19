@@ -138,18 +138,9 @@ const MapPage = {
 
     const route = this._liveData.liveRoute;
 
-    // Build track path using real railway waypoints
+    // Build track path using real railway waypoints (for train interpolation only)
     const stationCodes = route.map(s => s.station);
     const coords = getTrackPath(stationCodes);
-
-    // Draw polyline along real track
-    this._routeLine = L.polyline(coords, {
-      color: '#000000',
-      weight: 4,
-      opacity: 0.8,
-      smoothFactor: 1,
-      dashArray: null,
-    }).addTo(this._map);
 
     // Draw station markers
     route.forEach((stop, i) => {
