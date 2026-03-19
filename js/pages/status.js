@@ -20,6 +20,7 @@ const StatusPage = {
         <div class="status-search">
           <input class="input" type="text" placeholder="Enter train number (e.g. 12951)" id="status-train-input" autocomplete="off">
           <button class="btn btn-primary" id="status-search-btn">Track</button>
+          <button class="btn btn-secondary" id="status-map-btn" style="white-space:nowrap; display:none;">🗺️ Track on Map</button>
         </div>
 
         <div id="status-content"></div>
@@ -47,6 +48,13 @@ const StatusPage = {
           this._loadTrain(input.value.trim());
         }
       }
+      if (e.target.closest('#status-map-btn')) {
+        if (this._selectedTrain) {
+          localStorage.removeItem('railsmart_map_route'); // clear active route
+          saveSelectedTrain(this._selectedTrain.number);
+          window.location.hash = '#map';
+        }
+      }
       if (e.target.closest('#refresh-btn')) {
         this._refreshData();
       }
@@ -63,6 +71,8 @@ const StatusPage = {
     const train = TRAINS.find(t => t.number === query || t.name.toLowerCase().includes(query.toLowerCase()));
     if (!train) {
       this._showNotFound();
+      const mapBtn = $('#status-map-btn');
+      if (mapBtn) mapBtn.style.display = 'none';
       return;
     }
 
@@ -70,6 +80,9 @@ const StatusPage = {
     saveSelectedTrain(train.number);
     this._refreshData();
     this._startAutoRefresh();
+
+    const mapBtn = $('#status-map-btn');
+    if (mapBtn) mapBtn.style.display = 'inline-flex';
   },
 
   _refreshData() {

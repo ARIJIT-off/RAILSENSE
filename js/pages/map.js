@@ -97,6 +97,13 @@ const MapPage = {
           }
           this._findAndShowTrains();
         }
+      } else {
+        // Fallback: check if we just have a single train selected (e.g. from Status page)
+        const savedTrainNum = getSelectedTrain();
+        if (savedTrainNum) {
+          const train = TRAINS.find(t => t.number === savedTrainNum);
+          if (train) this._showSingleTrain(train);
+        }
       }
     }, 100);
   },
@@ -128,6 +135,7 @@ const MapPage = {
       // Change route → clear saved, re-render full inputs
       if (e.target.closest('#map-change-route')) {
         localStorage.removeItem('railsmart_map_route');
+        localStorage.removeItem('railsmart_selected_train');
         this._fromStation = null;
         this._toStation = null;
         this._clearMap();
@@ -223,6 +231,38 @@ const MapPage = {
         }
       };
     });
+  },
+
+  _showSingleTrain(train) {
+    this._fromStation = null;
+    this._toStation = null;
+
+    const selector = $('#map-station-selector');
+    if (selector) {
+      selector.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:15px;">🚆</span>
+          <span style="font-weight:600; color:var(--text-primary); font-size:14px;">Tracking: ${train.name}</span>
+          <button id="map-change-route" style="margin-left:auto; font-size:11px; color:var(--accent-cyan); background:none; border:1px solid var(--border-primary); padding:3px 10px; border-radius:6px; cursor:pointer; font-family:var(--font-family);">Clear</button>
+        </div>
+      `;
+    }
+
+    this._trainSlots = [{
+      key: 'main',
+      train,
+      liveData: generateLiveData(train),
+      marker: null,
+      stationMarkers: [],
+    }];
+    this._activeSlot = 'main';
+
+    const sidebar = $('#map-train-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+
+    this._renderTrains();
+    this._startAnimation();
+    this._startAutoRefresh();
   },
 
   _findAndShowTrains() {
