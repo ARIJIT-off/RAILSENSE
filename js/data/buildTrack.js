@@ -2,13 +2,14 @@ const https = require('https');
 const fs = require('fs');
 
 // ═══════════════════════════════════════════════
-// Build accurate Bandel–Howrah track geometry v3
-// Uses Overpass API + station-guided way walking.
-// For each station pair, finds connected ways that
-// make progress toward the next station.
+// Build track v6: POINT-LEVEL greedy walk.
+// Uses ALL individual coordinates from all ways
+// as a point pool, then walks from HWH to BDC
+// picking nearest unvisited points that continue 
+// in a consistent direction. Uses spatial grid
+// for fast neighbor lookup.
 // ═══════════════════════════════════════════════
 
-// Station coordinates (verified from OSM) — order: HWH → BDC
 const STATIONS = [
   { code: 'HWH', lat: 22.5828709, lng: 88.3428112 },
   { code: 'LLH', lat: 22.6209027, lng: 88.3394035 },
@@ -29,296 +30,240 @@ const STATIONS = [
   { code: 'BDC', lat: 22.9236692, lng: 88.3782855 },
 ];
 
-// Build Overpass polyline from stations
+const CACHE_FILE = 'js/data/overpass_cache.json';
+
 const coordStr = STATIONS.map(s => `${s.lat},${s.lng}`).join(',');
+const query = `[out:json][timeout:120];\nway["railway"="rail"](around:200,${coordStr});\nout body geom;`;
 
-const query = `
-[out:json][timeout:120];
-way["railway"="rail"](around:200,${coordStr});
-out body geom;
-`;
-
-function fetchOverpass(queryStr) {
+function fetchOverpass(q) {
   return new Promise((resolve, reject) => {
-    const postData = queryStr;
-    const options = {
-      hostname: 'overpass-api.de',
-      port: 443,
-      path: '/api/interpreter',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain',
-        'Content-Length': Buffer.byteLength(postData),
-      },
+    const opts = {
+      hostname: 'overpass-api.de', port: 443, path: '/api/interpreter',
+      method: 'POST', headers: { 'Content-Type': 'text/plain', 'Content-Length': Buffer.byteLength(q) },
     };
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error('Parse error')); }
-      });
+    const req = https.request(opts, res => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
     });
-    req.on('error', reject);
-    req.write(postData);
-    req.end();
+    req.on('error', reject); req.write(q); req.end();
   });
 }
 
-function sqDist(lat1, lng1, lat2, lng2) {
-  return (lat1 - lat2) ** 2 + (lng1 - lng2) ** 2;
+async function getData() {
+  // Try cache first
+  if (fs.existsSync(CACHE_FILE)) {
+    console.log('Using cached Overpass data');
+    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+  }
+  console.log('Fetching from Overpass API...');
+  const data = await fetchOverpass(query);
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(data));
+  console.log('Cached to', CACHE_FILE);
+  return data;
+}
+
+function sqDist(a, b) { return (a[0]-b[0])**2 + (a[1]-b[1])**2; }
+function bearing(p1, p2) { return Math.atan2(p2[1]-p1[1], p2[0]-p1[0]); }
+function bearingDiff(b1, b2) {
+  let d = Math.abs(b2 - b1);
+  if (d > Math.PI) d = 2 * Math.PI - d;
+  return d;
 }
 
 async function main() {
-  console.log('Fetching railway data from Overpass API...');
-  const data = await fetchOverpass(query);
+  const data = await getData();
+  const ways = data.elements.filter(e => e.type === 'way' && e.geometry);
+  console.log(`Got ${ways.length} ways`);
 
-  const ways = data.elements.filter(e => e.type === 'way' && e.geometry && e.nodes);
-  console.log(`Got ${ways.length} railway ways`);
-
-  // Build segments
-  const segments = ways.map(way => ({
-    id: way.id,
-    nodeIds: way.nodes,
-    coords: way.geometry.map(n => [n.lat, n.lon]),
-    firstNodeId: way.nodes[0],
-    lastNodeId: way.nodes[way.nodes.length - 1],
-  }));
-
-  // Node ID → segment indices
-  const nodeToSegs = {};
-  segments.forEach((seg, i) => {
-    [seg.firstNodeId, seg.lastNodeId].forEach(nid => {
-      if (!nodeToSegs[nid]) nodeToSegs[nid] = [];
-      if (!nodeToSegs[nid].includes(i)) nodeToSegs[nid].push(i);
+  // Extract ALL points from all ways, tagged with their way ID
+  // Within a way, consecutive points are on the same track
+  const allPoints = [];
+  ways.forEach(w => {
+    const coords = w.geometry.map(g => [g.lat, g.lon]);
+    coords.forEach((c, i) => {
+      allPoints.push({
+        lat: c[0], lng: c[1],
+        wayId: w.id,
+        posInWay: i,
+        wayLen: coords.length,
+        idx: allPoints.length,
+      });
     });
   });
+  console.log(`Total points: ${allPoints.length}`);
 
-  // ═══════════════════════════════════════════════
-  // Station-guided walk: for each station pair,
-  // find connected ways that lead from station A to B
-  // ═══════════════════════════════════════════════
+  // Build spatial grid for fast neighbor lookup
+  const CELL = 0.001; // ~100m cells
+  const grid = {};
+  allPoints.forEach(p => {
+    const key = `${Math.floor(p.lat/CELL)},${Math.floor(p.lng/CELL)}`;
+    if (!grid[key]) grid[key] = [];
+    grid[key].push(p);
+  });
 
-  function closestSegAndPoint(lat, lng) {
-    let bestD = Infinity, bestSeg = -1, bestPt = -1;
-    segments.forEach((seg, i) => {
-      seg.coords.forEach((c, j) => {
-        const d = sqDist(c[0], c[1], lat, lng);
-        if (d < bestD) { bestD = d; bestSeg = i; bestPt = j; }
-      });
-    });
-    return { segIdx: bestSeg, ptIdx: bestPt, dist: Math.sqrt(bestD) * 111000 };
-  }
-
-  // For a station pair, find the shortest path through way segments
-  function findPath(fromLat, fromLng, toLat, toLng, maxSteps) {
-    const startInfo = closestSegAndPoint(fromLat, fromLng);
-    const endInfo = closestSegAndPoint(toLat, toLng);
-
-    if (startInfo.segIdx === endInfo.segIdx) return [startInfo.segIdx];
-
-    // BFS with distance-to-target priority
-    const visited = new Set();
-    visited.add(startInfo.segIdx);
-    let queue = [{ segIdx: startInfo.segIdx, path: [startInfo.segIdx] }];
-
-    const targetDist = sqDist(fromLat, fromLng, toLat, toLng);
-    let bestPath = null;
-    let bestEndDist = Infinity;
-
-    for (let step = 0; step < (maxSteps || 200); step++) {
-      if (queue.length === 0) break;
-
-      // Priority: pick segment whose endpoint is closest to target
-      queue.sort((a, b) => {
-        const segA = segments[a.segIdx];
-        const segB = segments[b.segIdx];
-        const dA = Math.min(
-          sqDist(segA.coords[0][0], segA.coords[0][1], toLat, toLng),
-          sqDist(segA.coords[segA.coords.length-1][0], segA.coords[segA.coords.length-1][1], toLat, toLng)
-        );
-        const dB = Math.min(
-          sqDist(segB.coords[0][0], segB.coords[0][1], toLat, toLng),
-          sqDist(segB.coords[segB.coords.length-1][0], segB.coords[segB.coords.length-1][1], toLat, toLng)
-        );
-        return dA - dB;
-      });
-
-      const { segIdx, path } = queue.shift();
-
-      if (segIdx === endInfo.segIdx) {
-        return path;
-      }
-
-      // Check if this segment is close enough to target
-      const seg = segments[segIdx];
-      for (const c of seg.coords) {
-        const d = sqDist(c[0], c[1], toLat, toLng);
-        if (d < bestEndDist) {
-          bestEndDist = d;
-          bestPath = path;
+  function nearbyPoints(lat, lng, radius) {
+    const results = [];
+    const cx = Math.floor(lat / CELL);
+    const cy = Math.floor(lng / CELL);
+    const r = Math.ceil(radius / CELL) + 1;
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dy = -r; dy <= r; dy++) {
+        const cell = grid[`${cx+dx},${cy+dy}`];
+        if (!cell) continue;
+        for (const p of cell) {
+          const d = Math.sqrt(sqDist([p.lat, p.lng], [lat, lng]));
+          if (d <= radius) results.push({ ...p, dist: d });
         }
       }
+    }
+    return results.sort((a, b) => a.dist - b.dist);
+  }
 
-      // Explore connected ways
-      const endpoints = [seg.firstNodeId, seg.lastNodeId];
-      for (const nodeId of endpoints) {
-        for (const nextIdx of (nodeToSegs[nodeId] || [])) {
-          if (visited.has(nextIdx)) continue;
+  // ═══════════════════════════════════════════════
+  // GREEDY WALK: For each station pair, walk from
+  // one station to the next by picking nearby
+  // unvisited points. Prefer points on the SAME WAY
+  // to avoid jumping between parallel tracks.
+  // ═══════════════════════════════════════════════
 
-          // Reject ways that go too far from the corridor
-          const nextSeg = segments[nextIdx];
-          const midLat = (fromLat + toLat) / 2;
-          const midLng = (fromLng + toLng) / 2;
-          const maxCorridorDist = targetDist * 4; // generous corridor
+  const used = new Set(); // global set of used point indices
+  const fullTrack = [];
+  const MAX_HOP = 0.002; // ~200m max hop between consecutive points
 
-          let tooFar = true;
-          for (const c of nextSeg.coords) {
-            if (sqDist(c[0], c[1], midLat, midLng) < maxCorridorDist) {
-              tooFar = false;
-              break;
-            }
+  for (let s = 0; s < STATIONS.length - 1; s++) {
+    const from = STATIONS[s];
+    const to = STATIONS[s + 1];
+
+    // Find starting point: nearest to 'from' station
+    const starts = nearbyPoints(from.lat, from.lng, 0.005);
+    let current = null;
+    for (const p of starts) {
+      if (!used.has(p.idx)) { current = p; break; }
+    }
+    if (!current && starts.length > 0) current = starts[0];
+    if (!current) {
+      console.log(`  ${from.code}→${to.code}: NO START POINT`);
+      continue;
+    }
+
+    const segPoints = [[current.lat, current.lng]];
+    used.add(current.idx);
+    let currentBearing = bearing([from.lat, from.lng], [to.lat, to.lng]);
+
+    for (let step = 0; step < 2000; step++) {
+      // Check if we've reached close to target
+      const dTarget = Math.sqrt(sqDist([current.lat, current.lng], [to.lat, to.lng]));
+      if (dTarget < 0.001) break; // within ~100m
+
+      // Find nearby unvisited points
+      const nearby = nearbyPoints(current.lat, current.lng, MAX_HOP)
+        .filter(p => !used.has(p.idx) && p.idx !== current.idx);
+
+      if (nearby.length === 0) break;
+
+      // Score candidates
+      let bestScore = -Infinity;
+      let bestCandidate = null;
+
+      for (const cand of nearby) {
+        const candBearing = bearing([current.lat, current.lng], [cand.lat, cand.lng]);
+        const bDiff = bearingDiff(currentBearing, candBearing);
+
+        // Reject U-turns (>120°)
+        if (bDiff > 2.1) continue;
+
+        // Score: bearing continuity + same-way bonus + progress toward target
+        let score = 0;
+
+        // Bearing continuity (closer to current bearing = better)
+        score += (Math.PI - bDiff) * 10;
+
+        // Same-way bonus: strongly prefer staying on the same way
+        if (cand.wayId === current.wayId) {
+          // Extra bonus if it's the NEXT point in the way
+          const posDiff = Math.abs(cand.posInWay - current.posInWay);
+          if (posDiff === 1) {
+            score += 50; // BIG bonus for consecutive same-way point
+          } else if (posDiff <= 3) {
+            score += 20;
+          } else {
+            score += 5;
           }
-          if (tooFar) continue;
+        }
 
-          visited.add(nextIdx);
-          queue.push({ segIdx: nextIdx, path: [...path, nextIdx] });
+        // Progress toward target
+        const dCandTarget = Math.sqrt(sqDist([cand.lat, cand.lng], [to.lat, to.lng]));
+        score += (dTarget - dCandTarget) * 100; // closer to target = more points
+
+        // Distance penalty (closer = better)
+        score -= cand.dist * 50;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = cand;
         }
       }
+
+      if (!bestCandidate) break;
+
+      // Update bearing (smooth with previous)
+      const newBearing = bearing([current.lat, current.lng], [bestCandidate.lat, bestCandidate.lng]);
+      currentBearing = newBearing; // follow the track's actual direction
+
+      current = bestCandidate;
+      used.add(current.idx);
+      segPoints.push([current.lat, current.lng]);
     }
 
-    return bestPath || [startInfo.segIdx, endInfo.segIdx];
-  }
+    console.log(`  ${from.code}→${to.code}: ${segPoints.length} pts`);
 
-  // Build the full track by walking station-to-station
-  const allWayIndices = [];
-
-  for (let i = 0; i < STATIONS.length - 1; i++) {
-    const from = STATIONS[i];
-    const to = STATIONS[i + 1];
-
-    const path = findPath(from.lat, from.lng, to.lat, to.lng, 500);
-    console.log(`  ${from.code} → ${to.code}: ${path.length} ways`);
-
-    // Add only new ways (avoid duplicates at segment boundaries)
-    for (const segIdx of path) {
-      if (!allWayIndices.includes(segIdx)) {
-        allWayIndices.push(segIdx);
-      }
-    }
-  }
-
-  console.log(`Total unique ways used: ${allWayIndices.length}`);
-
-  // Chain the way geometries in correct order
-  const trackCoords = [];
-
-  for (let i = 0; i < allWayIndices.length; i++) {
-    const seg = segments[allWayIndices[i]];
-    let coords = [...seg.coords];
-
-    if (trackCoords.length === 0) {
-      // First segment — orient from HWH (south) northward
-      const dHead = sqDist(coords[0][0], coords[0][1], STATIONS[0].lat, STATIONS[0].lng);
-      const dTail = sqDist(coords[coords.length-1][0], coords[coords.length-1][1], STATIONS[0].lat, STATIONS[0].lng);
-      if (dTail < dHead) coords.reverse();
-      trackCoords.push(...coords);
+    // Add to full track
+    if (fullTrack.length === 0) {
+      fullTrack.push(...segPoints);
     } else {
-      // Connect to previous endpoint
-      const prevEnd = trackCoords[trackCoords.length - 1];
-      const dHead = sqDist(coords[0][0], coords[0][1], prevEnd[0], prevEnd[1]);
-      const dTail = sqDist(coords[coords.length-1][0], coords[coords.length-1][1], prevEnd[0], prevEnd[1]);
-      if (dTail < dHead) coords.reverse();
-      trackCoords.push(...coords.slice(1));
+      fullTrack.push(...segPoints.slice(1));
     }
   }
 
-  console.log(`Chained track: ${trackCoords.length} points`);
+  console.log(`\nFull track: ${fullTrack.length} points`);
 
-  // Trim to latitude range
-  const minLat = STATIONS[0].lat - 0.002;
-  const maxLat = STATIONS[STATIONS.length - 1].lat + 0.002;
-  const trimmed = trackCoords.filter(c => c[0] >= minLat && c[0] <= maxLat);
-
-  // Smooth: remove sharp zigzag points
-  function bearingAngle(p1, p2) {
-    return Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
-  }
-
-  let smoothed = [...trimmed];
-  let changed = true;
-  let passes = 0;
-  while (changed && passes < 10) {
-    changed = false;
-    passes++;
-    const next = [smoothed[0]];
-    for (let i = 1; i < smoothed.length - 1; i++) {
-      const b1 = bearingAngle(smoothed[i-1], smoothed[i]);
-      const b2 = bearingAngle(smoothed[i], smoothed[i+1]);
-      let diff = Math.abs(b2 - b1);
-      if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff > 2.0) { // ~115 degrees
-        changed = true;
-        continue;
-      }
-      next.push(smoothed[i]);
+  // Remove near-duplicates
+  const deduped = [fullTrack[0]];
+  for (let i = 1; i < fullTrack.length; i++) {
+    if (Math.sqrt(sqDist(fullTrack[i], fullTrack[i-1])) > 0.00003) {
+      deduped.push(fullTrack[i]);
     }
-    next.push(smoothed[smoothed.length - 1]);
-    smoothed = next;
-  }
-  console.log(`After smoothing (${passes} passes): ${smoothed.length} points`);
-
-  // Downsample if too many points (keep every Nth to reduce to ~300-500)
-  let final = smoothed;
-  if (final.length > 500) {
-    const keepEvery = Math.ceil(final.length / 400);
-    const downsampled = [final[0]];
-    for (let i = keepEvery; i < final.length - 1; i += keepEvery) {
-      downsampled.push(final[i]);
-    }
-    downsampled.push(final[final.length - 1]);
-    final = downsampled;
-    console.log(`Downsampled to ${final.length} points`);
   }
 
   // Round
-  const output = final.map(c => [
-    Math.round(c[0] * 1e7) / 1e7,
-    Math.round(c[1] * 1e7) / 1e7,
-  ]);
+  const output = deduped.map(c => [Math.round(c[0]*1e7)/1e7, Math.round(c[1]*1e7)/1e7]);
+  console.log(`Output: ${output.length} points`);
 
   // Verify
   console.log('\n--- Station proximity check ---');
+  const sIdxs = [];
   STATIONS.forEach(st => {
     let minD = Infinity, bestI = 0;
     for (let i = 0; i < output.length; i++) {
-      const d = sqDist(st.lat, st.lng, output[i][0], output[i][1]);
+      const d = sqDist([st.lat, st.lng], output[i]);
       if (d < minD) { minD = d; bestI = i; }
     }
-    const meters = Math.round(Math.sqrt(minD) * 111000);
-    console.log(`  ${st.code}: idx ${bestI}, offset ~${meters}m`);
+    sIdxs.push(bestI);
+    console.log(`  ${st.code}: idx ${bestI}, ~${Math.round(Math.sqrt(minD)*111000)}m`);
   });
+  console.log(`Monotonic: ${sIdxs.every((v,i)=>i===0||v>=sIdxs[i-1])}`);
 
-  // Check monotonicity (indices should increase)
-  const stationIndices = STATIONS.map(st => {
-    let minD = Infinity, bestI = 0;
-    for (let i = 0; i < output.length; i++) {
-      const d = sqDist(st.lat, st.lng, output[i][0], output[i][1]);
-      if (d < minD) { minD = d; bestI = i; }
-    }
-    return bestI;
-  });
-  const isMonotonic = stationIndices.every((v, i) => i === 0 || v > stationIndices[i-1]);
-  console.log(`Station indices monotonic: ${isMonotonic}`);
-  if (!isMonotonic) {
-    console.log('Station indices:', stationIndices.join(', '));
+  let jumps = 0;
+  for (let i = 1; i < output.length; i++) {
+    const d = Math.sqrt(sqDist(output[i], output[i-1]));
+    if (d > 0.003) { jumps++; console.log(`  ⚠ Jump@${i}: ${(d*111000).toFixed(0)}m`); }
   }
+  console.log(jumps === 0 ? '✅ No big jumps!' : `${jumps} jumps > 300m`);
 
-  // Save
-  const header = '// Auto-generated track geometry: Bandel–Howrah main line\n// Built using Overpass API station-guided way walking\n';
-  const content = header + `const TRACK_GEOMETRY = ${JSON.stringify(output)};\n`;
-  fs.writeFileSync('js/data/trackWaypoints.js', content);
-  console.log('\n✅ Saved trackWaypoints.js');
+  fs.writeFileSync('js/data/trackWaypoints.js',
+    '// Auto-generated: Bandel–Howrah main line\n// Built with point-level greedy walk + same-way preference\n' +
+    `const TRACK_GEOMETRY = ${JSON.stringify(output)};\n`);
+  console.log('\n✅ Saved!');
 }
 
-main().catch(err => console.error('Error:', err.message));
+main().catch(e => console.error('Error:', e.message));

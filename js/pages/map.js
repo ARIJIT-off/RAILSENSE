@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════
 
 const TRAIN_COLORS = {
-  main: { dot: '#10b981', emoji: '🔴🚆', label: 'Main', bg: 'rgba(16,185,129,0.15)', border: '#10b981' },
+  main: { dot: '#f22323ff', emoji: '🔴🚆', label: 'Main', bg: 'rgba(16,185,129,0.15)', border: '#10b981' },
   alt1: { dot: '#3b82f6', emoji: '🔵🚆', label: 'Alt-1', bg: 'rgba(59,130,246,0.15)', border: '#3b82f6' },
   alt2: { dot: '#f59e0b', emoji: '🟠🚆', label: 'Alt-2', bg: 'rgba(245,158,11,0.15)', border: '#f59e0b' },
 };
