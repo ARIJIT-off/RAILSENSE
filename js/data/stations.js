@@ -4,23 +4,23 @@
 // ═══════════════════════════════════════════════
 
 const STATIONS = [
-  { code: 'BDC',  name: 'Bandel Junction',  city: 'Bandel',       state: 'West Bengal', lat: 22.92363, lng: 88.37833, zone: 'ER', platforms: 7  },
+  { code: 'BDC',  name: 'Bandel Junction',  city: 'Bandel',       state: 'West Bengal', lat: 22.923669, lng: 88.378286, zone: 'ER', platforms: 7  },
   { code: 'HGY',  name: 'Hooghly',          city: 'Hooghly',      state: 'West Bengal', lat: 22.905211, lng: 88.376064, zone: 'ER', platforms: 2  },
-  { code: 'CNS',  name: 'Chuchura',         city: 'Chinsurah',    state: 'West Bengal', lat: 22.890925, lng: 88.370343, zone: 'ER', platforms: 2  },
-  { code: 'CGR',  name: 'Chandan Nagar',    city: 'Chandannagar', state: 'West Bengal', lat: 22.882652, lng: 88.364755, zone: 'ER', platforms: 3  },
+  { code: 'CNS',  name: 'Chuchura',         city: 'Chinsurah',    state: 'West Bengal', lat: 22.890912, lng: 88.370284, zone: 'ER', platforms: 2  },
+  { code: 'CGR',  name: 'Chandan Nagar',    city: 'Chandannagar', state: 'West Bengal', lat: 22.867071, lng: 88.354080, zone: 'ER', platforms: 3  },
   { code: 'MUU',  name: 'Mankundu',         city: 'Mankundu',     state: 'West Bengal', lat: 22.847312, lng: 88.347130, zone: 'ER', platforms: 2  },
   { code: 'BHR',  name: 'Bhadreshwar',      city: 'Bhadreswar',   state: 'West Bengal', lat: 22.828202, lng: 88.341494, zone: 'ER', platforms: 4  },
-  { code: 'BBAE', name: 'Baidyabati',       city: 'Baidyabati',   state: 'West Bengal', lat: 22.796936, lng: 88.332525, zone: 'ER', platforms: 2  },
-  { code: 'SHE',  name: 'Seoraphuli',       city: 'Seoraphuli',   state: 'West Bengal', lat: 22.76917, lng: 88.32833, zone: 'ER', platforms: 6  },
-  { code: 'SRP',  name: 'Shrirampur',       city: 'Serampore',    state: 'West Bengal', lat: 22.74833, lng: 88.34167, zone: 'ER', platforms: 4  },
+  { code: 'BBAE', name: 'Baidyabati',       city: 'Baidyabati',   state: 'West Bengal', lat: 22.794910, lng: 88.331773, zone: 'ER', platforms: 2  },
+  { code: 'SHE',  name: 'Seoraphuli',       city: 'Seoraphuli',   state: 'West Bengal', lat: 22.774722, lng: 88.328333, zone: 'ER', platforms: 6  },
+  { code: 'SRP',  name: 'Shrirampur',       city: 'Serampore',    state: 'West Bengal', lat: 22.754579, lng: 88.338308, zone: 'ER', platforms: 4  },
   { code: 'RIS',  name: 'Rishra',           city: 'Rishra',       state: 'West Bengal', lat: 22.724706, lng: 88.343435, zone: 'ER', platforms: 2  },
-  { code: 'KOG',  name: 'Konnagar',         city: 'Konnagar',     state: 'West Bengal', lat: 22.70125, lng: 88.34250, zone: 'ER', platforms: 2  },
+  { code: 'KOG',  name: 'Konnagar',         city: 'Konnagar',     state: 'West Bengal', lat: 22.701260, lng: 88.342511, zone: 'ER', platforms: 2  },
   { code: 'HMZ',  name: 'Hind Motor',       city: 'Hindmotor',    state: 'West Bengal', lat: 22.683651, lng: 88.341799, zone: 'ER', platforms: 2  },
-  { code: 'UPA',  name: 'Uttarpara',        city: 'Uttarpara',    state: 'West Bengal', lat: 22.665489, lng: 88.341080, zone: 'ER', platforms: 2  },
-  { code: 'BLY',  name: 'Bally',            city: 'Bally',        state: 'West Bengal', lat: 22.65000, lng: 88.34000, zone: 'ER', platforms: 5  },
-  { code: 'BEQ',  name: 'Belur',            city: 'Belur',        state: 'West Bengal', lat: 22.637402, lng: 88.339935, zone: 'ER', platforms: 4  },
-  { code: 'LLH',  name: 'Liluah',           city: 'Liluah',       state: 'West Bengal', lat: 22.62106, lng: 88.33941, zone: 'ER', platforms: 3  },
-  { code: 'HWH',  name: 'Howrah Junction',  city: 'Kolkata',      state: 'West Bengal', lat: 22.58287, lng: 88.34281, zone: 'ER', platforms: 23 },
+  { code: 'UPA',  name: 'Uttarpara',        city: 'Uttarpara',    state: 'West Bengal', lat: 22.667046, lng: 88.341146, zone: 'ER', platforms: 2  },
+  { code: 'BLY',  name: 'Bally',            city: 'Bally',        state: 'West Bengal', lat: 22.655065, lng: 88.340303, zone: 'ER', platforms: 5  },
+  { code: 'BEQ',  name: 'Belur',            city: 'Belur',        state: 'West Bengal', lat: 22.635732, lng: 88.339822, zone: 'ER', platforms: 4  },
+  { code: 'LLH',  name: 'Liluah',           city: 'Liluah',       state: 'West Bengal', lat: 22.620903, lng: 88.339404, zone: 'ER', platforms: 3  },
+  { code: 'HWH',  name: 'Howrah Junction',  city: 'Kolkata',      state: 'West Bengal', lat: 22.582871, lng: 88.342811, zone: 'ER', platforms: 23 },
 ];
 
 // ── Real railway track waypoints between stations ──

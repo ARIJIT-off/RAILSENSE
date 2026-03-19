@@ -158,7 +158,8 @@ const JourneyPage = {
     this._clearMap();
 
     const route = this._liveData.liveRoute;
-    const coords = route.map(s => [s.stationInfo?.lat || 0, s.stationInfo?.lng || 0]).filter(c => c[0] !== 0);
+    const stationCodes = route.map(s => s.station);
+    const coords = getTrackPath(stationCodes);
 
     this._routeLine = L.polyline(coords, {
       color: '#475569',
@@ -192,9 +193,10 @@ const JourneyPage = {
     if (boardingIdx === -1 || destIdx === -1 || boardingIdx >= destIdx) return;
 
     const currentIdx = this._liveData.currentStationIdx;
-    const allCoords = route.map(s => [s.stationInfo?.lat || 0, s.stationInfo?.lng || 0]);
+    const allStationCodes = route.map(s => s.station);
+    const allCoords = getTrackPath(allStationCodes);
 
-    // Draw faded full route
+    // Draw faded full route along real track
     L.polyline(allCoords, {
       color: '#334155',
       weight: 2,
@@ -202,8 +204,9 @@ const JourneyPage = {
       dashArray: '8,8',
     }).addTo(this._map);
 
-    // Draw journey segment highlighted
-    const journeyCoords = allCoords.slice(boardingIdx, destIdx + 1);
+    // Draw journey segment highlighted along real track
+    const journeyStationCodes = allStationCodes.slice(boardingIdx, destIdx + 1);
+    const journeyCoords = getTrackPath(journeyStationCodes);
     this._routeLine = L.polyline(journeyCoords, {
       color: '#000000',
       weight: 5,
@@ -292,15 +295,33 @@ const JourneyPage = {
     const cur = route[currentIdx];
     const nxt = route[nextIdx];
     if (!cur.stationInfo || !nxt.stationInfo) return null;
-    if (currentIdx === nextIdx) return [cur.stationInfo.lat, cur.stationInfo.lng];
+
+    if (currentIdx === nextIdx) {
+      const idx = getClosestTrackIdx(cur.stationInfo.lat, cur.stationInfo.lng);
+      return TRACK_GEOMETRY[idx] || [cur.stationInfo.lat, cur.stationInfo.lng];
+    }
 
     const currentMin = getCurrentSimMinutes();
     const dep = cur.actualDeparture || cur.actualArrival;
     const arr = nxt.actualArrival || nxt.actualDeparture;
-    if (!dep || !arr) return [cur.stationInfo.lat, cur.stationInfo.lng];
+    if (!dep || !arr) {
+      const idx = getClosestTrackIdx(cur.stationInfo.lat, cur.stationInfo.lng);
+      return TRACK_GEOMETRY[idx] || [cur.stationInfo.lat, cur.stationInfo.lng];
+    }
 
     let p = (currentMin - dep) / (arr - dep);
     p = Math.max(0, Math.min(1, p));
+
+    // Interpolate along TRACK_GEOMETRY, not a straight line
+    if (typeof TRACK_GEOMETRY !== 'undefined' && TRACK_GEOMETRY.length) {
+      const idx1 = getClosestTrackIdx(cur.stationInfo.lat, cur.stationInfo.lng);
+      const idx2 = getClosestTrackIdx(nxt.stationInfo.lat, nxt.stationInfo.lng);
+      const targetIdx = Math.round(idx1 + (idx2 - idx1) * p);
+      const clamped = Math.max(0, Math.min(TRACK_GEOMETRY.length - 1, targetIdx));
+      return TRACK_GEOMETRY[clamped];
+    }
+
+    // Fallback: straight-line
     return [
       cur.stationInfo.lat + (nxt.stationInfo.lat - cur.stationInfo.lat) * p,
       cur.stationInfo.lng + (nxt.stationInfo.lng - cur.stationInfo.lng) * p,
