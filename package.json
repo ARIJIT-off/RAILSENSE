@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@turf/turf": "^7.3.4",
+    "axios": "^1.13.6",
+    "polyline": "^0.2.0"
+  }
+}
