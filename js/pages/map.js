@@ -234,8 +234,8 @@ const MapPage = {
   },
 
   _showSingleTrain(train) {
-    this._fromStation = null;
-    this._toStation = null;
+    this._fromStation = findStation(train.route[0].station);
+    this._toStation = findStation(train.route[train.route.length - 1].station);
 
     const selector = $('#map-station-selector');
     if (selector) {
@@ -248,18 +248,42 @@ const MapPage = {
       `;
     }
 
-    this._trainSlots = [{
-      key: 'main',
-      train,
-      liveData: generateLiveData(train),
+    // Save map route so Analytics adapts
+    saveMapRoute(this._fromStation.code, this._toStation.code);
+
+    // Find alternative trains passing through the same start & end stations
+    const fromCode = this._fromStation.code;
+    const toCode = this._toStation.code;
+    const allTrains = searchTrainsBetweenStations(fromCode, toCode);
+
+    // Filter out the selected train and sort by nearest departure
+    const otherTrains = allTrains.filter(t => t.number !== train.number);
+    const nowMin = getCurrentSimMinutes();
+    otherTrains.sort((a, b) => {
+      const aStop = a.route.find(s => s.station === fromCode);
+      const bStop = b.route.find(s => s.station === fromCode);
+      const aDep = aStop ? aStop.departureMin : 9999;
+      const bDep = bStop ? bStop.departureMin : 9999;
+      const aDiff = (aDep - nowMin + 1440) % 1440;
+      const bDiff = (bDep - nowMin + 1440) % 1440;
+      return aDiff - bDiff;
+    });
+
+    // Make the explicit train 'main', and the next closest 2 as alts
+    const top3 = [train, ...otherTrains.slice(0, 2)];
+    const slotKeys = ['main', 'alt1', 'alt2'];
+
+    this._trainSlots = top3.map((t, i) => ({
+      key: slotKeys[i],
+      train: t,
+      liveData: generateLiveData(t),
       marker: null,
       stationMarkers: [],
-    }];
+    }));
+
     this._activeSlot = 'main';
 
-    const sidebar = $('#map-train-sidebar');
-    if (sidebar) sidebar.style.display = 'none';
-
+    this._renderSidebar();
     this._renderTrains();
     this._startAnimation();
     this._startAutoRefresh();
