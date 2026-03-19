@@ -82,10 +82,19 @@ const MapPage = {
         this._fromStation = findStation(savedRoute.from);
         this._toStation = findStation(savedRoute.to);
         if (this._fromStation && this._toStation) {
-          const fromInp = $('#map-from-input');
-          const toInp = $('#map-to-input');
-          if (fromInp) fromInp.value = `${this._fromStation.name} (${this._fromStation.code})`;
-          if (toInp) toInp.value = `${this._toStation.name} (${this._toStation.code})`;
+          // Hide station inputs, show compact route label
+          const selector = $('#map-station-selector');
+          if (selector) {
+            selector.innerHTML = `
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:15px;">📍</span>
+                <span style="font-weight:600; color:var(--text-primary); font-size:14px;">${this._fromStation.name}</span>
+                <span style="color:var(--text-muted);">→</span>
+                <span style="font-weight:600; color:var(--text-primary); font-size:14px;">${this._toStation.name}</span>
+                <button id="map-change-route" style="margin-left:auto; font-size:11px; color:var(--accent-cyan); background:none; border:1px solid var(--border-primary); padding:3px 10px; border-radius:6px; cursor:pointer; font-family:var(--font-family);">Change</button>
+              </div>
+            `;
+          }
           this._findAndShowTrains();
         }
       }
@@ -99,7 +108,7 @@ const MapPage = {
   },
 
   _bindEvents() {
-    // Layer buttons
+    // Layer buttons + slot clicks + change route
     on(document, 'click', (e) => {
       const layerBtn = e.target.closest('[data-layer]');
       if (layerBtn) {
@@ -114,6 +123,36 @@ const MapPage = {
         this._activeSlot = slotBtn.dataset.slot;
         this._renderTrains();
         this._updateSidebarActive();
+      }
+
+      // Change route → clear saved, re-render full inputs
+      if (e.target.closest('#map-change-route')) {
+        localStorage.removeItem('railsmart_map_route');
+        this._fromStation = null;
+        this._toStation = null;
+        this._clearMap();
+        this._trainSlots = [];
+        const sidebar = $('#map-train-sidebar');
+        if (sidebar) sidebar.style.display = 'none';
+        const panel = $('#map-info-panel');
+        if (panel) panel.style.display = 'none';
+        const selector = $('#map-station-selector');
+        if (selector) {
+          selector.innerHTML = `
+            <h4 style="margin-bottom:var(--space-2); color:var(--text-primary);">📍 Select Route</h4>
+            <div class="map-station-inputs">
+              <div class="autocomplete" id="map-from-ac" style="position:relative;">
+                <input class="input" type="text" placeholder="From station..." id="map-from-input" autocomplete="off" style="font-size:13px; padding:8px 10px;">
+                <div class="autocomplete-dropdown" id="map-from-dropdown" style="display:none; position:absolute; z-index:9999; width:100%; max-height:250px; overflow-y:auto; background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:8px; top:100%;"></div>
+              </div>
+              <span style="color:var(--text-muted); text-align:center; font-size:16px;">→</span>
+              <div class="autocomplete" id="map-to-ac" style="position:relative;">
+                <input class="input" type="text" placeholder="To station..." id="map-to-input" autocomplete="off" style="font-size:13px; padding:8px 10px;">
+                <div class="autocomplete-dropdown" id="map-to-dropdown" style="display:none; position:absolute; z-index:9999; width:100%; max-height:250px; overflow-y:auto; background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:8px; top:100%;"></div>
+              </div>
+            </div>
+          `;
+        }
       }
     });
 
