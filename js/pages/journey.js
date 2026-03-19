@@ -205,7 +205,7 @@ const JourneyPage = {
     // Draw journey segment highlighted
     const journeyCoords = allCoords.slice(boardingIdx, destIdx + 1);
     this._routeLine = L.polyline(journeyCoords, {
-      color: '#3b82f6',
+      color: '#000000',
       weight: 5,
       opacity: 0.9,
     }).addTo(this._map);

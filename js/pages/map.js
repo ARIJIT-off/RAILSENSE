@@ -144,7 +144,7 @@ const MapPage = {
 
     // Draw polyline along real track
     this._routeLine = L.polyline(coords, {
-      color: '#3b82f6',
+      color: '#000000',
       weight: 4,
       opacity: 0.8,
       smoothFactor: 1,
