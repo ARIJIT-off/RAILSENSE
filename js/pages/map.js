@@ -76,6 +76,19 @@ const MapPage = {
     setTimeout(() => {
       this._initMap();
       this._bindEvents();
+      // Auto-load saved route from Search page
+      const savedRoute = getMapRoute();
+      if (savedRoute && savedRoute.from && savedRoute.to) {
+        this._fromStation = findStation(savedRoute.from);
+        this._toStation = findStation(savedRoute.to);
+        if (this._fromStation && this._toStation) {
+          const fromInp = $('#map-from-input');
+          const toInp = $('#map-to-input');
+          if (fromInp) fromInp.value = `${this._fromStation.name} (${this._fromStation.code})`;
+          if (toInp) toInp.value = `${this._toStation.name} (${this._toStation.code})`;
+          this._findAndShowTrains();
+        }
+      }
     }, 100);
   },
 
@@ -305,25 +318,44 @@ const MapPage = {
       const color = TRAIN_COLORS[slot.key];
       const route = slot.liveData.liveRoute;
 
-      // Station markers
+      // Station markers — styled station pins with code labels
       route.forEach((stop, i) => {
         if (!stop.stationInfo) return;
         const isCurrent = i === slot.liveData.currentStationIdx;
         const isPassed = stop.hasPassed;
-        let fill = '#64748b', rad = 5, fop = 0.6;
-        if (isPassed) { fill = color.dot; fop = 0.8; }
-        if (isCurrent) { fill = color.dot; rad = 9; fop = 1; }
+        const isFirst = i === 0;
+        const isLast = i === route.length - 1;
 
-        const marker = L.circleMarker([stop.stationInfo.lat, stop.stationInfo.lng], {
-          radius: rad, fillColor: fill, fillOpacity: fop, color: 'white', weight: 2, opacity: 0.9,
-        }).addTo(this._map);
+        let dotColor = '#475569';
+        let dotSize = 10;
+        let labelBg = 'rgba(30,41,59,0.85)';
+        if (isPassed) { dotColor = color.dot; }
+        if (isCurrent) { dotColor = color.dot; dotSize = 14; labelBg = color.bg; }
+        if (isFirst || isLast) { dotSize = 14; }
+
+        const stationIcon = L.divIcon({
+          html: `<div style="display:flex; align-items:center; gap:4px; white-space:nowrap;">
+            <div style="width:${dotSize}px; height:${dotSize}px; border-radius:50%; background:${dotColor}; border:2px solid white; box-shadow:0 0 6px rgba(0,0,0,0.4); flex-shrink:0;"></div>
+            <div style="background:${labelBg}; color:white; font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; font-family:monospace; letter-spacing:0.5px; backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,0.1);">${stop.station}</div>
+          </div>`,
+          className: 'station-pin-container',
+          iconSize: [80, 20],
+          iconAnchor: [dotSize / 2, dotSize / 2],
+        });
+
+        const marker = L.marker([stop.stationInfo.lat, stop.stationInfo.lng], { icon: stationIcon, zIndexOffset: isCurrent ? 500 : 0 }).addTo(this._map);
+
+        const delayHtml = stop.delay > 0
+          ? `<span style="color:#f59e0b; font-weight:600;">⚠ +${stop.delay}min late</span>`
+          : `<span style="color:#10b981; font-weight:600;">✓ On Time</span>`;
 
         marker.bindPopup(`
-          <div style="font-family:Inter,sans-serif; font-size:13px; min-width:140px;">
-            <strong>${stop.stationInfo.name}</strong> (${stop.station})
-            ${stop.arrivalMin ? `<br>Arr: ${formatTime(stop.actualArrival || stop.arrivalMin)}` : ''}
-            ${stop.departureMin ? `<br>Dep: ${formatTime(stop.actualDeparture || stop.departureMin)}` : ''}
-            ${stop.delay > 0 ? `<br><span style="color:#f59e0b;">+${stop.delay}min</span>` : `<br><span style="color:#10b981;">On Time</span>`}
+          <div style="font-family:Inter,sans-serif; font-size:13px; min-width:160px; line-height:1.6;">
+            <div style="font-size:14px; font-weight:700; margin-bottom:4px;">${isFirst ? '🚉 ' : isLast ? '🏁 ' : '📍 '}${stop.stationInfo.name}</div>
+            <div style="color:#94a3b8; font-size:11px; margin-bottom:6px;">${stop.station} · Platform ${stop.platform}</div>
+            ${stop.arrivalMin ? `<div>Arr: <strong>${formatTime(stop.actualArrival || stop.arrivalMin)}</strong></div>` : ''}
+            ${stop.departureMin ? `<div>Dep: <strong>${formatTime(stop.actualDeparture || stop.departureMin)}</strong></div>` : ''}
+            <div style="margin-top:4px;">${delayHtml}</div>
           </div>
         `);
 
@@ -331,18 +363,20 @@ const MapPage = {
         allLatLngs.push([stop.stationInfo.lat, stop.stationInfo.lng]);
       });
 
-      // Train emoji marker
+      // Train marker — realistic styled indicator
       const pos = this._getSlotTrainPosition(slot);
       if (pos) {
         const heading = this._getSlotHeading(slot);
-        const emojiLabel = this._activeSlot === 'all' ? color.emoji : '🚆';
         const trainIcon = L.divIcon({
-          html: `<div class="map-train-icon" style="transform:rotate(${heading}deg);">
-                   <div class="map-train-pulse" style="border-color:${color.border};"></div>
-                   <div class="map-train-svg">${emojiLabel}</div>
-                 </div>`,
+          html: `<div style="position:relative; width:48px; height:48px; display:flex; align-items:center; justify-content:center;">
+            <div style="position:absolute; width:48px; height:48px; border-radius:50%; border:2px solid ${color.border}; opacity:0.4; animation:pulse 2s infinite;"></div>
+            <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, ${color.border}, ${color.dot}); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 12px ${color.border}80; border:2px solid white; transform:rotate(${heading}deg);">
+              <span style="font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));">🚆</span>
+            </div>
+            <div style="position:absolute; bottom:-14px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:700; color:white; background:${color.border}; padding:1px 5px; border-radius:3px; white-space:nowrap; font-family:monospace;">#${slot.train.number.slice(-4)}</div>
+          </div>`,
           className: 'train-marker-container',
-          iconSize: [40, 40], iconAnchor: [20, 20],
+          iconSize: [48, 60], iconAnchor: [24, 24],
         });
         slot.marker = L.marker(pos, { icon: trainIcon, zIndexOffset: 1000 }).addTo(this._map);
       }

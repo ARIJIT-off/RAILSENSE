@@ -167,6 +167,10 @@ const SearchPage = {
       if (trainCard) {
         const trainNum = trainCard.dataset.train;
         saveSelectedTrain(trainNum);
+        // Save from/to so MAP-TRACK auto-populates
+        if (this._fromStation && this._toStation) {
+          saveMapRoute(this._fromStation.code, this._toStation.code);
+        }
         window.location.hash = '#map';  // → MAP-TRACK
       }
 

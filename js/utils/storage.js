@@ -52,3 +52,12 @@ function getSelectedTrain() {
 function saveSelectedTrain(train) {
   localStorage.setItem(STORAGE_KEYS.SELECTED_TRAIN, JSON.stringify(train));
 }
+
+function saveMapRoute(fromCode, toCode) {
+  localStorage.setItem('railsmart_map_route', JSON.stringify({ from: fromCode, to: toCode }));
+}
+
+function getMapRoute() {
+  try { return JSON.parse(localStorage.getItem('railsmart_map_route')) || null; }
+  catch { return null; }
+}
