@@ -150,7 +150,7 @@ function searchStations(query) {
     s.code.toLowerCase().includes(q) ||
     s.name.toLowerCase().includes(q) ||
     s.city.toLowerCase().includes(q)
-  ).slice(0, 15);
+  ).slice(0, 30);
 }
 
 // Helper: Get stations on a specific route

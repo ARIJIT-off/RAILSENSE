@@ -218,6 +218,16 @@ const SearchPage = {
       }
     });
 
+    // Show all stations on focus (click into input)
+    on(document, 'focus', (e) => {
+      if (e.target.id === 'from-input') {
+        this._showAutocomplete('from', e.target.value, true);
+      }
+      if (e.target.id === 'to-input') {
+        this._showAutocomplete('to', e.target.value, true);
+      }
+    }, true);
+
     // Date picker
     on(document, 'change', (e) => {
       if (e.target.id === 'date-picker') {
@@ -250,12 +260,22 @@ const SearchPage = {
     });
   },
 
-  _showAutocomplete(which, query) {
+  _showAutocomplete(which, query, showAll = false) {
     const dropdown = $(`#${which}-dropdown`);
     if (!dropdown) return;
 
-    const matches = searchStations(query);
-    if (!matches.length || !query) {
+    let matches;
+    if (query && query.trim()) {
+      matches = searchStations(query);
+    } else if (showAll) {
+      // Show all stations when focused with empty input
+      matches = STATIONS.slice(0, 40);
+    } else {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    if (!matches.length) {
       dropdown.style.display = 'none';
       return;
     }
@@ -269,6 +289,8 @@ const SearchPage = {
     `).join('');
 
     dropdown.style.display = 'block';
+    dropdown.style.maxHeight = '300px';
+    dropdown.style.overflowY = 'auto';
 
     // Bind clicks on options
     $$('.autocomplete-option', dropdown).forEach(opt => {
